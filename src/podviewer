@@ -2,7 +2,7 @@
 # Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. 
-# $Id: podviewer,v 1.29 2004/05/21 10:05:07 jodrell Exp $
+# $Id: podviewer,v 1.30 2004/09/08 09:58:03 jodrell Exp $
 use lib 'lib/';
 use Gtk2 -init;
 use Gtk2::PodViewer;
@@ -284,8 +284,6 @@ $window->signal_connect('window-state-event', sub {
 		} else {
 			$FULLSCREEN  = 1;
 		}
-	} else {
-		print STDERR "unknown mask: $mask\n";
 	}
 });
 $window->show_all;

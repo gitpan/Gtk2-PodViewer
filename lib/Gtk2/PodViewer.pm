@@ -1,4 +1,4 @@
-# $Id: PodViewer.pm,v 1.22 2004/09/01 10:59:22 jodrell Exp $
+# $Id: PodViewer.pm,v 1.23 2004/09/08 09:58:26 jodrell Exp $
 # Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. 
@@ -9,7 +9,7 @@ use vars qw($VERSION);
 use Gtk2::Pango; # pango constants
 use strict;
 
-our $VERSION = '0.08';
+our $VERSION = '0.08a';
 
 #
 # we want to create a new signal for this object, which means we need to

@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# $Id: Makefile.PL,v 1.3 2003/09/14 16:36:26 jodrell Exp $
+# $Id: Makefile.PL,v 1.4 2004/09/08 09:58:26 jodrell Exp $
 
 use ExtUtils::MakeMaker;
 
@@ -12,6 +12,7 @@ WriteMakefile(
     	Pod::Parser	=> 0,
     	IO::Scalar	=> 0,
     	File::Basename	=> 0,
+    	Locale::gettext	=> 0,
     },
     'EXE_FILES'		=> [ 'src/podviewer' ]
 );

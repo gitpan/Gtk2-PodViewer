@@ -18,6 +18,7 @@ This module requires these other modules and libraries:
     IO::Scalar
     Pod::Parser
     File::Basename
+    Locale::gettext
 
 BUGS
 
@@ -33,4 +34,4 @@ under the same terms as Perl itself.
 Copyright (C) 2004 Gavin Brown.
 
 --
-$Id: README,v 1.4 2004/03/09 13:25:07 jodrell Exp $
+$Id: README,v 1.5 2004/09/08 09:58:26 jodrell Exp $

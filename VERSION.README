@@ -1,0 +1,8 @@
+NOTE ABOUT THE VERSION OF THIS RELEASE
+======================================
+
+It was pointed out to me that Version 0.08 depended on Locale::gettext, but
+that this wasn't mentioned in Makefile.PL and README. This version is identical
+to 0.08, but this omission has been corrected.
+
+GB, 2004-09-08.
