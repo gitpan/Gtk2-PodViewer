@@ -1,4 +1,4 @@
-# $Id: PodViewer.pm,v 1.14 2004/01/25 12:51:37 jodrell Exp $
+# $Id: PodViewer.pm,v 1.18 2004/03/10 21:47:56 jodrell Exp $
 # Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. 
@@ -9,7 +9,7 @@ use vars qw($VERSION);
 use Gtk2::Pango; # pango constants
 use strict;
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 #
 # we want to create a new signal for this object, which means we need to
@@ -28,6 +28,12 @@ Glib::Type->register (
 	signals => {
 		link_clicked => {
 			param_types => [qw/Glib::String/],
+		},
+		'link_enter' => {
+			param_types => [qw/Glib::String/],
+		},
+		'link_leave' => {
+			#param_types => [qw/Glib::String/],
 		},
 	},
 );
@@ -117,12 +123,19 @@ sub INIT_INSTANCE {
 	$self->signal_connect('motion_notify_event' => sub {
 		my ($view, $event) = @_;
 		my ($x, $y) = $view->window_to_buffer_coords('text', $event->x, $event->y);
+		my $over_link = $view->get_iter_at_location($x, $y)->has_tag($view->get_buffer()->get_tag_table()->lookup("link"));
+		if ($over_link == 1 && $self->{was_over_link} != 1) {
+			# user has just brought the mouse over a link:
+			$self->{was_over_link} = 1;
+			my $text = $self->get_link_text_at_iter($view->get_iter_at_location($x, $y));
+			$self->signal_emit('link_enter', $text) if ($text ne '');
+		} elsif ($over_link != 1 && $self->{was_over_link} == 1) {
+			# user has just the mouse away from a link:
+			$self->{was_over_link} = 0;
+			$self->signal_emit('link_leave');
+		}
 
-		$view->get_window('text')->set_cursor(
-			$view->get_iter_at_location($x, $y)->has_tag($view->get_buffer()->get_tag_table()->lookup("link")) ?
-			$url_cursor :
-			$cursor
-		);
+		$view->get_window('text')->set_cursor($over_link ? $url_cursor : $cursor);
 		return 0;
 	});
 }
@@ -423,17 +436,26 @@ sub clicked {
 	my ($self, $event) = @_;
 	my ($x, $y) = $self->window_to_buffer_coords('widget', $event->get_coords);
 	my $iter = $self->get_iter_at_location($x, $y);
+	my $text = $self->get_link_text_at_iter($iter);
+	if ($text ne '') {
+		$self->signal_emit('link_clicked', $text);
+	}
+	return 1;
+}
+
+sub get_link_text_at_iter {
+	my ($self, $iter) = @_;
 	my $tag = $self->get_buffer->get_tag_table->lookup('link');
 	if ($iter->has_tag($tag)) {
 		my $offset = $iter->get_offset;
-		LOOP: for (my $i = 0 ; $i < scalar(@{$self->parser->{links}}) ; $i++) {
+		for (my $i = 0 ; $i < scalar(@{$self->parser->{links}}) ; $i++) {
 			my ($text,  $this_offset) = @{@{$self->parser->{links}}[$i]};
-			if ($offset > $this_offset && $offset < ($this_offset + length($text))) {
-				$self->signal_emit('link_clicked', $text);
-				last LOOP;
+			if ($offset >= $this_offset && $offset <= ($this_offset + length($text))) {
+				return $text;
 			}
 		}
 	}
+	return undef;
 }
 
 =pod
@@ -453,6 +475,28 @@ Gtk2::PodViewer inherits all of Gtk2::TextView's signals, and has the following:
 
 Emitted when the user clicks on a hyperlink within the POD. This may be a section title, a document name, or a URL. The receiving function will be giving two arguments: a reference to the Gtk2::PodViewer object, and a scalar containing the link text.
 
+=head2 The 'link_enter' signal
+
+	$viewer->signal_connect('link_enter', \&enter);
+
+	sub enter {
+		my ($viewer, $link_text) = @_;
+		print "user moused over '$link_text'\n";
+	}
+
+Emitted when the user moves the mouse pointer over a hyperlink within the POD. This may be a section title, a document name, or a URL. The receiving function will be giving two arguments: a reference to the Gtk2::PodViewer object, and a scalar containing the link text.
+
+=head2 The 'link_leave' signal
+
+	$viewer->signal_connect('link-enter-leave', \&leave);
+
+	sub clicked {
+		my $viewer = shift;
+		print "user moused out\n";
+	}
+
+Emitted when the user moves the mouse pointer out from a hyperlink within the POD. 
+
 =head1 THE podviewer PROGRAM
 
 C<podviewer> is installed with Gtk2::PodViewer. It is a simple Pod viewing program. It is pretty minimal, but does do the job quite well.
@@ -467,7 +511,11 @@ We currently know about these issues:
 
 =item *
 
-Rendering of long documents takes ages.
+When rendering long documents the UI freezes for too long.
+
+=item *
+
+When you click on a link, the first line of text in the new document is hilighted.
 
 =back
 
@@ -513,7 +561,7 @@ Gavin Brown, Torsten Schoenfeld and Scott Arrington.
 
 =head1 COPYRIGHT
 
-(c) 2003 Gavin Brown (gavin.brown@uk.com). All rights reserved. This program is free software; you can redistribute it and/or modify it under the same terms as Perl itself. 
+(c) 2004 Gavin Brown (gavin.brown@uk.com). All rights reserved. This program is free software; you can redistribute it and/or modify it under the same terms as Perl itself. 
 
 =cut
 

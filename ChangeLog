@@ -1,3 +1,33 @@
+2004-03-10 21:52  jodrell
+
+	* src/podviewer: slight change to the way Ctrl-F works - more
+	consistent now.
+
+2004-03-10 21:47  jodrell
+
+	* lib/Gtk2/PodViewer.pm, lib/Gtk2/PodViewer/Parser.pm,
+	src/podviewer: added help files, fixed some things, more cleanups.
+
+2004-03-10 14:07  jodrell
+
+	* lib/Gtk2/PodViewer.pm, src/podviewer: fixed the "coming in from
+	the west" bug.
+
+2004-03-10 00:00  jodrell
+
+	* lib/Gtk2/PodViewer.pm, lib/Gtk2/PodViewer/Parser.pm,
+	src/podviewer: fixed loads of bugs, and added a few more.
+
+2004-03-09 13:25  jodrell
+
+	* README: added debs.
+
+2004-03-09 13:22  jodrell
+
+	* lib/Gtk2/PodViewer.pm, lib/Gtk2/PodViewer/Parser.pm,
+	src/podviewer: made some UI changes - removed the main_iteration
+	calls in the parser which seems to speed things up.
+
 2004-01-25 12:54  jodrell
 
 	* README: added bug notice.

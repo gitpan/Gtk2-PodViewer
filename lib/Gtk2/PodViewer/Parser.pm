@@ -1,4 +1,4 @@
-# $Id: Parser.pm,v 1.11 2003/09/14 16:36:26 jodrell Exp $
+# $Id: Parser.pm,v 1.14 2004/03/10 21:47:56 jodrell Exp $
 # Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. package Gtk2::PodViewer::Parser;
@@ -93,6 +93,7 @@ sub insert_text {
 		F	=> 'italic',
 		S	=> 'monospace',
 		E	=> 'word_wrap',
+		X	=> undef,
 	);
 	my %entities = (
 		lt	=> '<',
@@ -117,7 +118,11 @@ sub insert_text {
 						} elsif ($command eq 'L') {
 							push(@{$parser->{links}}, [$text, $parser->{iter}->get_offset]);
 						}
-						$parser->{buffer}->insert_with_tags_by_name($parser->{iter}, $text, $tagnames{$command}, @tags);
+						if (!defined($tagnames{$command})) {
+							warn("warning: unknown formatting code '$command'\n");
+						} else {
+							$parser->{buffer}->insert_with_tags_by_name($parser->{iter}, $text, $tagnames{$command}, @tags);
+						}
 					} else {
 						my $text = $_;
 						$parser->{buffer}->insert_with_tags_by_name($parser->{iter}, $text, @tags);
@@ -129,7 +134,6 @@ sub insert_text {
 		$line_num
 	);
 
-	Gtk2->main_iteration while (Gtk2->events_pending);
 	return 1;
 }
 
@@ -193,7 +197,7 @@ Torsten Schoenfeld
 
 =head1 COPYRIGHT
 
-(c) 2003 Gavin Brown (gavin.brown@uk.com). All rights reserved. This program is free software; you can redistribute it and/or modify it under the same terms as Perl itself. 
+(c) 2004 Gavin Brown (gavin.brown@uk.com). All rights reserved. This program is free software; you can redistribute it and/or modify it under the same terms as Perl itself. 
 
 =cut
 
