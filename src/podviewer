@@ -2,6 +2,7 @@
 # Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. 
+# $Id: podviewer,v 1.14 2003/09/19 20:52:36 jodrell Exp $
 use lib 'lib/';
 use Gtk2 -init;
 use Gtk2::PodViewer;
@@ -44,6 +45,18 @@ if (open(RCFILE, $RCFILE)) {
 }
 
 chomp(my $PREFIX = `gtk-config --prefix`);
+
+chomp (my $htmlview = `which htmlview`);
+chomp (my $gnome_moz_remote = `which gnome-moz-remote`);
+
+my $BROWSER;
+if (defined($ENV{BROWSER})) {
+	$BROWSER = $ENV{BROWSER};
+} elsif (-x $htmlview) {
+	$BROWSER = $htmlview;
+} elsif (-x $gnome_moz_remote) {
+	$BROWSER = $gnome_moz_remote;
+}
 
 my $iconfile = sprintf('%s/share/pixmaps/documents.png', $PREFIX);
 
@@ -147,8 +160,9 @@ $index_button->signal_connect('toggled', sub {
 });
 
 my $viewer = Gtk2::PodViewer->new;
+$viewer->set_link_callback(\&link_clicked);
 
-$index->signal_connect('row_activated', sub {
+$index->get_selection->signal_connect('changed', sub {
 	my $idx = ($index->get_selected_indices)[0];
 	my $mark = $index->{data}[$idx][1];
 	$viewer->jump_to($mark);
@@ -248,13 +262,15 @@ sub browse {
 
 sub load {
 	my $text = $combo->entry->get_text;
-	return if ($text eq '');
+	$text =~ s/^\s+//g;
+	$text =~ s/\s+$//g;
+	return undef if ($text eq '');
 	set_status('Loading...');
 	$browse_button->set_sensitive(0);
 	$load_button->set_sensitive(0);
 	$up_button->set_sensitive(0);
-	@{$index->{data}} = ();
 	if ($viewer->load($text)) {
+		@{$index->{data}} = ();
 		map { push(@{$index->{data}}, [ $idx_pbf, $_ ]) } $viewer->get_marks;
 		if (-e $text) {
 			$window->set_title(sprintf('%s: %s', $NAME, basename($text)));
@@ -272,6 +288,7 @@ sub load {
 			$up_button->set_sensitive(1);
 		}
 		$SEARCH_OFFSET = 0;
+		return 1;
 	} else {
 		my $dialog = Gtk2::MessageDialog->new($window, 'modal', 'error', 'ok', "Couldn't find a POD document for '$text'.");
 		if (-e $iconfile) {
@@ -285,9 +302,37 @@ sub load {
 			$up_button->set_sensitive(1);
 		}
 		$dialog->run;
+		return undef;
 	}
-	return 1;
 }
+
+sub document_prompt {
+	my $entry = Gtk2::Entry->new;
+	my $table = Gtk2::Table->new(2, 2, 0);
+	$table->set_col_spacings(8);
+	$table->set_row_spacings(8);
+	$table->attach_defaults(Gtk2::Image->new_from_stock('gtk-dialog-question', 'dialog'), 0, 1, 0, 2);
+	$table->attach_defaults(Gtk2::Label->new('Enter document name:'), 1, 2, 0, 1);
+	$table->attach_defaults($entry, 1, 2, 1, 2);
+	my $dialog = Gtk2::Dialog->new;
+	$dialog->set_title('Find');
+	$dialog->set_modal(1);
+	$dialog->add_buttons('gtk-cancel' => 1, 'gtk-ok' => 0);
+	$dialog->vbox->set_spacing(8);
+	$dialog->set_border_width(8);
+	$dialog->vbox->pack_start($table, 1, 1, 0);
+	$dialog->show_all;
+	$entry->signal_connect('activate', sub { $dialog->signal_emit('response', 0) });
+	$dialog->signal_connect('response', sub {
+		$dialog->destroy;
+		if ($_[1] == 0 && $entry->get_text ne '') {
+			$combo->entry->set_text($entry->get_text);
+			$combo->entry->grab_focus;
+			load();
+		}
+	});
+	$dialog->run;
+	return 1;}
 
 sub close_program {
 	open(HISTORY_FILE, ">$HISTORY_FILE");
@@ -308,14 +353,21 @@ sub close_program {
 sub about {
 	my $about = Gtk2::Dialog->new;
 	my $label = Gtk2::Label->new;
+	my $browser_string = ($BROWSER ne '' ? "$NAME will use '".basename($BROWSER)."' for URLs" : 'no browser defined.');
 	my $markup = <<"END";
 <span weight="bold" size="large">Pod Viewer</span>
 
 Using Gtk2::PodViewer v$Gtk2::PodViewer::VERSION
 
-Copyright (c) 2003 Gavin Brown
+Copyright (c) 2003
+Gavin Brown
 Torsten Schoenfeld
 
+<span size="small">This program is free software; you can
+redistribute it and/or modify it under
+the same terms as Perl itself.</span>
+
+<span size="small">$browser_string</span>
 END
 	$label->set_markup($markup);
 	$label->set_justify('center');
@@ -428,5 +480,52 @@ sub search_dialog {
 		}
 	});
 	$dialog->run;
+	return 1;
+}
+
+sub link_clicked {
+	my (undef, $text) = @_;
+	$text =~ s/\"$//g;
+	$text =~ s/^\"//g;
+	my @marks = $viewer->get_marks;
+	my $seen = 0;
+	map { s/^[\"\']//g ; s/[\"\']$//g ; $seen++ if (lc($_) eq lc($text)) } @marks;
+	if ($seen > 0) {
+		for (my $i = 0 ; $i < scalar(@marks) ; $i++) {
+			$marks[$i] =~ s/^[\"\']//g;
+			$marks[$i] =~ s/[\"\']$//g;
+			if (lc($marks[$i]) eq lc($text)) {
+				$index->select($i);
+				return 1;
+			}
+		}
+	} elsif ($text =~ /^(\w+)\:\/\//) {
+		if ($BROWSER ne '') {
+			system(sprintf('%s %s &', $BROWSER, quotemeta($text)));
+		} else {
+			my $dialog = Gtk2::MessageDialog->new($window, 'modal', 'error', 'ok', "Couldn't find a web browser. Consider setting the \$BROWSER variable.");
+			if (-e $iconfile) {
+				$dialog->set_icon(Gtk2::Gdk::Pixbuf->new_from_file($iconfile));
+			}
+			$dialog->signal_connect('response', sub { $dialog->destroy });
+			$dialog->run;
+		}
+	} elsif ($text =~ /^\// && ! -e $text) {
+		$text =~ s/^\///;
+		link_clicked(undef, $text);
+	} elsif ($text =~ /\// && ! -e $text) {
+		my ($doc, $section) = split(/\//, $text, 2);
+		my $old = $combo->entry->get_text;
+		$combo->entry->set_text($doc);
+		if (load()) {
+			link_clicked(undef, $section);
+		} else {
+			$combo->entry->set_text($old);
+		}
+	} else {
+		my $old = $combo->entry->get_text;
+		$combo->entry->set_text($text);
+		$combo->entry->set_text($old) unless (load());
+	}
 	return 1;
 }

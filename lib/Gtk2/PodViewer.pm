@@ -1,4 +1,4 @@
-# $Id: PodViewer.pm,v 1.10 2003/09/12 16:11:11 jodrell Exp $
+# $Id: PodViewer.pm,v 1.13 2003/09/15 19:18:25 jodrell Exp $
 # Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. 
@@ -15,7 +15,7 @@ use constant PANGO_WEIGHT_ULTRABOLD  => 800;
 use constant PANGO_WEIGHT_HEAVY      => 900;
 use strict;
 
-$VERSION = '0.02';
+$VERSION = '0.03';
 
 =pod
 
@@ -25,6 +25,7 @@ Gtk2::PodViewer - a Gtk2 widget for displaying Plain old Documentation (POD).
 
 =head1 SYNOPSIS
 
+	use Gtk2 -init;
 	use Gtk2::PodViewer;
 
 	my $viewer = Gtk2::PodViewer->new;
@@ -41,11 +42,22 @@ Gtk2::PodViewer - a Gtk2 widget for displaying Plain old Documentation (POD).
 
 	$window->show;
 
+	Gtk2->main;
+
 =head1 DESCRIPTION
 
 Gtk2::PodViewer is a widget for rendering Perl POD documents. It is based on the Gtk2::TextView widget and uses Pod::Parser for manipulating POD data.
 
 Gtk2::PodViewer widgets inherit all the methods and properties of Gtk2::TextView widgets. Full information about text buffers can be found in the Gtk+ documentation at L<http://developer.gnome.org/doc/API/2.0/gtk/GtkTextView.html>.
+
+=head1 OBJECT HIERARCHY
+
+	L<Glib::Object>
+	+--- L<Gtk2::Object>
+	     +--- L<Gtk2::Widget>
+	          +--- L<Gtk2::Editable>
+		       +--- L<Gtk2::TextView>
+			    +--- L<Gtk2::PodViewer>
 
 =head1 CONSTRUCTOR
 
@@ -117,7 +129,41 @@ sub new {
 		'indented',
 		left_margin	=> 40,
 	);
+
+	my $cursor	= Gtk2::Gdk::Cursor->new('xterm');
+	my $url_cursor	= Gtk2::Gdk::Cursor->new('hand2');
+
+	$self->signal_connect('button_press_event', sub { $self->clicked(@_) ; return 0 });
+
+	$self->signal_connect_after('realize' => sub {
+		my ($view) = @_;
+
+		$view->get_window('text')->set_events([qw(exposure-mask
+							  pointer-motion-mask
+							  button-press-mask
+							  button-release-mask
+							  key-press-mask
+							  structure-mask
+							  property-change-mask
+							  scroll-mask)]);
+
+		return 0;
+	});
+
+	$self->signal_connect('motion_notify_event' => sub {
+		my ($view, $event) = @_;
+		my ($x, $y) = $view->window_to_buffer_coords('text', $event->x, $event->y);
+
+		$view->get_window('text')->set_cursor(
+			$view->get_iter_at_location($x, $y)->has_tag($view->get_buffer()->get_tag_table()->lookup("link")) ?
+			$url_cursor :
+			$cursor
+		);
+		return 0;
+	});
+
 	bless($self, $package);
+	return $self;
 }
 
 =pod
@@ -155,6 +201,8 @@ would result in
 
 	@marks = ( 'NAME', 'SYNOPSIS');
 
+You can then use the contents of this array to create a document index.
+
 =cut
 
 sub get_marks {
@@ -188,8 +236,22 @@ this scrolls the PodViewer window to the selected mark.
 sub jump_to {
 	my ($self, $name) = @_;
 	my $mark = $self->get_mark($name);
-	#return $self->scroll_mark_onscreen($mark);
+	return undef unless (ref($mark) eq 'Gtk2::TextMark');
 	return $self->scroll_to_mark($mark, undef, 1, 0, 0);
+}
+
+=pod
+
+	$view->set_link_callback($callback);
+
+sets a callback function to be used when the user clicks on a hyperlink within the POD. This may be a section title, a document name, or a URL. The receiving function will be giving two arguments: a reference to the C<Gtk2::PodViewer> object, and a scalar containing the link text.
+
+=cut
+
+sub set_link_callback {
+	my ($self, $callback) = @_;
+	$self->{link_callback} = $callback;
+	return 1;
 }
 
 =pod
@@ -266,18 +328,6 @@ sub load_module {
 	return undef;
 }
 
-sub load_file {
-	my ($self, $file) = @_;
-	if (-e $file) {
-		$self->clear;
-		$self->parser->clear_marks;
-		$self->parser->parse_from_file($file);
-		return 1;
-	} else {
-		return undef;
-	}
-}
-
 sub load_function {
 	my ($self, $function) = @_;
 	my $perlfunc = $self->perlfunc;
@@ -315,6 +365,18 @@ sub load_function {
 	return 1;
 }
 
+sub load_file {
+	my ($self, $file) = @_;
+	if (-e $file) {
+		$self->clear;
+		$self->parser->clear_marks;
+		$self->parser->parse_from_file($file);
+		return 1;
+	} else {
+		return undef;
+	}
+}
+
 sub load_string {
 	my ($self, $string) = @_;
 	$self->clear;
@@ -335,8 +397,34 @@ sub perlfunc {
 	}
 }
 
+=pod
+
+	$parser = $view->parser;
+
+returns the C<Gtk2::PodViewer::Parser> object used to render the POD data.
+
+=cut
+
 sub parser {
 	return $_[0]->{parser};
+}
+
+sub clicked {
+	my ($self, undef, $event) = @_;
+	my ($x, $y) = $self->window_to_buffer_coords('widget', $event->get_coords);
+	my $iter = $self->get_iter_at_location($x, $y);
+	my $tag = $self->get_buffer->get_tag_table->lookup('link');
+	if ($iter->has_tag($tag)) {
+		my $offset = $iter->get_offset;
+		LOOP: for (my $i = 0 ; $i < scalar(@{$self->parser->{links}}) ; $i++) {
+			my ($text,  $this_offset) = @{@{$self->parser->{links}}[$i]};
+			if ($offset > $this_offset && $offset < ($this_offset + length($text))) {
+				return &{$self->{link_callback}}($self, $text) if (defined($self->{link_callback}));
+				last LOOP;
+			}
+		}
+	}
+	return 1;
 }
 
 =pod
@@ -349,11 +437,9 @@ C<podviewer> is installed with Gtk2::PodViewer. It is a simple Pod viewing progr
 
 Gtk2::PodViewer is a work in progress. All comments, complaints, offers of help and patches are welcomed.
 
+We currently know about these issues:
+
 =over
-
-=item *
-
-Links don't work.
 
 =item *
 
@@ -399,8 +485,7 @@ L<Gtk2::PodViewer::Parser>
 
 =head1 AUTHORS
 
-Lead development by Gavin Brown.
-Additional development by Torsten Schoenfeld.
+Gavin Brown, Torsten Schoenfeld and Scott Arrington.
 
 =head1 COPYRIGHT
 

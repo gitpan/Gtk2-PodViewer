@@ -1,4 +1,4 @@
-# $Id: Parser.pm,v 1.9 2003/09/12 16:11:11 jodrell Exp $
+# $Id: Parser.pm,v 1.11 2003/09/14 16:36:26 jodrell Exp $
 # Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. package Gtk2::PodViewer::Parser;
@@ -101,26 +101,25 @@ sub insert_text {
 		sol	=> '/',
 	);
 
-	$parser -> parse_text(
+	$parser->parse_text(
 		{
 			-expand_ptree => sub {
 				my ($parser, $ptree) = @_;
 
-				foreach ($ptree -> children()) {
+				foreach ($ptree->children) {
 					if (ref($_) eq "Pod::InteriorSequence") {
 						my $sequence = $_;
-						my $command = $sequence -> cmd_name();
-						my $text = $sequence -> parse_tree() -> raw_text();
+						my $command = $sequence->cmd_name;
+						my $text = $sequence->parse_tree->raw_text;
 
 						if ($command eq 'E') {
 							$text = $entities{$text} || $text;
+						} elsif ($command eq 'L') {
+							push(@{$parser->{links}}, [$text, $parser->{iter}->get_offset]);
 						}
-
 						$parser->{buffer}->insert_with_tags_by_name($parser->{iter}, $text, $tagnames{$command}, @tags);
-					}
-					else {
+					} else {
 						my $text = $_;
-
 						$parser->{buffer}->insert_with_tags_by_name($parser->{iter}, $text, @tags);
 					}
 				}
@@ -189,8 +188,8 @@ L<Pod::Parser>
 
 =head1 AUTHORS
 
-Lead development by Gavin Brown.
-Additional development by Torsten Schoenfeld.
+Gavin Brown
+Torsten Schoenfeld
 
 =head1 COPYRIGHT
 
