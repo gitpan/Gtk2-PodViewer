@@ -1,4 +1,4 @@
-# $Id: PodViewer.pm,v 1.23 2004/09/08 09:58:26 jodrell Exp $
+# $Id: PodViewer.pm,v 1.26 2004/09/13 12:58:56 jodrell Exp $
 # Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. 
@@ -128,12 +128,12 @@ sub INIT_INSTANCE {
 		my ($view, $event) = @_;
 		my ($x, $y) = $view->window_to_buffer_coords('text', $event->x, $event->y);
 		my $over_link = $view->get_iter_at_location($x, $y)->has_tag($view->get_buffer()->get_tag_table()->lookup("link"));
-		if ($over_link == 1 && $self->{was_over_link} != 1) {
+		if ($over_link && !$self->{was_over_link}) {
 			# user has just brought the mouse over a link:
 			$self->{was_over_link} = 1;
 			my $text = $self->get_link_text_at_iter($view->get_iter_at_location($x, $y));
 			$self->signal_emit('link_enter', $text) if ($text ne '');
-		} elsif ($over_link != 1 && $self->{was_over_link} == 1) {
+		} elsif (!$over_link && $self->{was_over_link}) {
 			# user has just the mouse away from a link:
 			$self->{was_over_link} = 0;
 			$self->signal_emit('link_leave');
@@ -424,7 +424,7 @@ sub clicked {
 	my ($x, $y) = $self->window_to_buffer_coords('widget', $event->get_coords);
 	my $iter = $self->get_iter_at_location($x, $y);
 	my $text = $self->get_link_text_at_iter($iter);
-	if ($text ne '') {
+	if (defined($text) && $text ne '') {
 		$self->signal_emit('link_clicked', $text);
 	}
 	return 1;
@@ -486,7 +486,7 @@ Emitted when the user moves the mouse pointer out from a hyperlink within the PO
 
 =head1 THE podviewer PROGRAM
 
-C<podviewer> is installed with Gtk2::PodViewer. It is a simple Pod viewing program. It is pretty minimal, but does do the job quite well.
+C<podviewer> is installed with Gtk2::PodViewer. It is a simple Pod viewing program. It is pretty minimal, but does do the job quite well. Those looking for a more feature-complete documentation browser should try PodBrowser, available from L<http://jodrell.net/projects/podbrowser>.
 
 =head1 BUGS AND TASKS
 
@@ -502,7 +502,7 @@ When rendering long documents the UI freezes for too long.
 
 =item *
 
-When you click on a link, the first line of text in the new document is hilighted.
+Some strangeness with Unicode.
 
 =back
 
@@ -512,17 +512,19 @@ When you click on a link, the first line of text in the new document is hilighte
 
 =item *
 
-Gtk2 (obviously). The most recent version will be from L<http://gtk2-perl.sf.net/>.
+L<Gtk>2 (obviously). The most recent version will be from L<http://gtk2-perl.sf.net/>.
 
 =item *
 
-Pod::Parser
+L<Pod::Parser>
 
 =item *
 
-IO::Scalar
+L<IO::Scalar>
 
 =back
+
+L<Gtk2::PodViewer::Parser>, which is part of the L<Gtk2::PodViewer> distribution, also requires L<Locale::gettext>.
 
 =head1 SEE ALSO
 

@@ -1,11 +1,12 @@
-# $Id: Parser.pm,v 1.16 2004/08/31 16:21:39 jodrell Exp $
+# $Id: Parser.pm,v 1.18 2004/09/13 10:44:20 jodrell Exp $
 # Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. package Gtk2::PodViewer::Parser;
 package Gtk2::PodViewer::Parser;
 use base 'Pod::Parser';
+use Carp;
 use IO::Scalar;
-use vars qw(%ENTITIES);
+use vars qw(%ENTITIES $LINK_TEXT_TEMPLATE);
 use Exporter;
 use Locale::gettext;
 use strict;
@@ -124,6 +125,8 @@ our %ENTITIES	= (
 	"nbsp"		=>	"\x01",		# non-breaking space
 );
 
+our $LINK_TEXT_TEMPLATE = '{section} in the {document} manpage';
+
 =pod
 
 =head1 NAME
@@ -131,6 +134,8 @@ our %ENTITIES	= (
 Gtk2::PodViewer::Parser - a custom POD Parser for Gtk2::PodViewer.
 
 =head1 SYNOPSIS
+
+	$Gtk2::PodViewer::Parser::LINK_TEXT_TEMPLATE = '{section} in the {document} manpage';
 
 	my $parser = Gtk2::PodViewer::Parser->new(
 		buffer	=> $Gtk2TextView->get_buffer,
@@ -182,7 +187,7 @@ sub command {
 			$parser->insert_text("$paragraph\n\n", $line_num, qw(word_wrap indented));
 		}
 	} elsif ($command !~ /^(pod|cut|for|over|back)$/i) {
-		warn("unknown command: $command on line $line_num");
+		carp("unknown command: '$command' on line $line_num");
 		$parser->insert_text($paragraph, $line_num, qw(word_wrap));
 	}
 }
@@ -236,11 +241,18 @@ sub insert_text {
 
 							if ($text =~ /\/[^:]/ && $text !~ /:\/\//) {
 								my ($doc, $section) = split(/\//, $text, 2);
-								$text = sprintf(gettext('%s in the %s manpage'), $section, $doc);
+								if ($doc eq '') {
+									$text = $section;
+								} else {
+									$text = gettext($LINK_TEXT_TEMPLATE);
+									$text =~ s/\{section\}/$section/g;
+									$text =~ s/\{document\}/$doc/g;
+								}
 							}
+
 						}
 						if (!exists($tagnames{$command})) {
-							warn("warning: unknown formatting code '$command'\n");
+							carp("warning: unknown formatting code '$command'\n");
 						} else {
 							$parser->{buffer}->insert_with_tags_by_name($parser->{iter}, decode_entities($text), $tagnames{$command}, @tags);
 						}
@@ -315,6 +327,14 @@ sub decode_entities {
 
 =pod
 
+=head1 VARIABLES
+
+The C<$LINK_TEXT_TEMPLATE> class variable contains a string that is used to generate link text for POD links for the form
+
+	LE<lt>foo/barE<gt>
+
+This string is run through the C<gettext()> function from L<Locale::gettext> before it is used, so if your application supports internationalisation, then the string will be translated if it appears in your translation domain. It contains two tokens, C<{section}> and C<{document}>, that are replaced with C<foo> and C<bar> respectively.
+
 =head1 SEE ALSO
 
 =over
@@ -327,11 +347,15 @@ L<Gtk2::PodViewer>
 
 L<Pod::Parser>
 
+=item *
+
+L<Locale::gettext>
+
 =back
 
 =head1 AUTHORS
 
-Gavin Brown and Torsten Schoenfeld.
+Gavin Brown, Torsten Schoenfeld and Scott Arrington.
 
 =head1 COPYRIGHT
 
