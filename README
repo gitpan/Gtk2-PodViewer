@@ -16,12 +16,18 @@ This module requires these other modules and libraries:
     Pod::Parser
     File::Basename
 
+BUGS
+
+Something is wrong with the way Unicode characters are handled; it needs
+some attention. The next version will probably address this. Thanks to
+Marc Lehmann to spotting this.
+
 COPYRIGHT AND LICENCE
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
 
-Copyright (C) 2003 Gavin Brown. All rights reserved.
+Copyright (C) 2004 Gavin Brown.
 
 --
-$Id: README,v 1.1 2003/09/12 16:15:01 jodrell Exp $
+$Id: README,v 1.3 2004/01/25 12:54:52 jodrell Exp $

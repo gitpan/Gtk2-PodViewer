@@ -1,3 +1,13 @@
+2004-01-25 12:54  jodrell
+
+	* README: added bug notice.
+
+2004-01-25 12:51  jodrell
+
+	* README, lib/Gtk2/PodViewer.pm, src/podviewer: added muppet's
+	patch which implements the link_clicked signal and cleans things
+	up.
+
 2003-09-19 21:52  jodrell
 
 	* src/podviewer: added browser string.
@@ -74,10 +84,10 @@
 2003-07-24 16:31  jodrell
 
 	* lib/Gtk2/PodViewer.pm, lib/Gtk2/PodViewer/Parser.pm,
-	src/podviewer: Initial revision
+	src/podviewer: Initial import
 
 2003-07-24 16:31  jodrell
 
 	* lib/Gtk2/PodViewer.pm, lib/Gtk2/PodViewer/Parser.pm,
-	src/podviewer: Initial import
+	src/podviewer: Initial revision
 

@@ -1,22 +1,131 @@
-# $Id: PodViewer.pm,v 1.13 2003/09/15 19:18:25 jodrell Exp $
+# $Id: PodViewer.pm,v 1.14 2004/01/25 12:51:37 jodrell Exp $
 # Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. 
 package Gtk2::PodViewer;
 use Gtk2;
 use Gtk2::PodViewer::Parser;
-use base 'Gtk2::TextView';
 use vars qw($VERSION);
-use constant PANGO_WEIGHT_ULTRALIGHT => 200;
-use constant PANGO_WEIGHT_LIGHT      => 300;
-use constant PANGO_WEIGHT_NORMAL     => 400;
-use constant PANGO_WEIGHT_BOLD       => 700;
-use constant PANGO_WEIGHT_ULTRABOLD  => 800;
-use constant PANGO_WEIGHT_HEAVY      => 900;
+use Gtk2::Pango; # pango constants
 use strict;
 
-$VERSION = '0.03';
+our $VERSION = '0.04';
 
+#
+# we want to create a new signal for this object, which means we need to
+# create a new GType.  however, using Glib::Object::Subclass (as of Glib
+# 1.031 and all previous) makes it impossible for us to be require'd,
+# thanks to the CHECK block madness.  so, we use Glib::Type::register
+# directly.
+#
+
+# inherit new from Glib::Object.
+*new = \&Glib::Object::new;
+
+Glib::Type->register (
+	Gtk2::TextView::,
+	__PACKAGE__,
+	signals => {
+		link_clicked => {
+			param_types => [qw/Glib::String/],
+		},
+	},
+);
+
+sub INIT_INSTANCE {
+	my $self = shift;
+	$self->set_editable(0);
+	$self->set_wrap_mode('word');
+	$self->{parser} = Gtk2::PodViewer::Parser->new(buffer => $self->get_buffer);
+	$self->get_buffer->create_tag(
+		'bold',
+		weight		=> PANGO_WEIGHT_BOLD
+	);
+	$self->get_buffer->create_tag(
+		'italic',
+		style		=> 'italic',
+	);
+	$self->get_buffer->create_tag(
+		'word_wrap',
+		wrap_mode	=> 'word',
+	);
+	$self->get_buffer->create_tag(
+		'head1',
+		weight		=> PANGO_WEIGHT_BOLD,
+		size		=> 15 * PANGO_SCALE,
+		wrap_mode	=> 'word',
+	);
+	$self->get_buffer->create_tag(
+		'head2',
+		weight		=> PANGO_WEIGHT_BOLD,
+		size		=> 12 * PANGO_SCALE,
+		wrap_mode	=> 'word',
+	);
+	$self->get_buffer->create_tag(
+		'head3',
+		weight		=> PANGO_WEIGHT_BOLD,
+		size		=> 9 * PANGO_SCALE,
+		wrap_mode	=> 'word',
+	);
+	$self->get_buffer->create_tag(
+		'head4',
+		weight		=> PANGO_WEIGHT_BOLD,
+		size		=> 6 * PANGO_SCALE,
+		wrap_mode	=> 'word',
+	);
+	$self->get_buffer->create_tag(
+		'monospace',
+		family		=> 'monospace',
+		wrap_mode	=> 'none',
+	);
+	$self->get_buffer->create_tag(
+		'typewriter',
+		family		=> 'monospace',
+		wrap_mode	=> 'word',
+	);
+	$self->get_buffer->create_tag(
+		'link',
+		foreground	=> 'blue',
+		underline	=> 'single',
+		wrap_mode	=> 'word',
+	);
+	$self->get_buffer->create_tag(
+		'indented',
+		left_margin	=> 40,
+	);
+
+	my $cursor	= Gtk2::Gdk::Cursor->new('xterm');
+	my $url_cursor	= Gtk2::Gdk::Cursor->new('hand2');
+
+	$self->signal_connect('button_release_event', sub { $self->clicked($_[1]) ; return 0 });
+
+	$self->signal_connect_after('realize' => sub {
+		my ($view) = @_;
+
+		$view->get_window('text')->set_events([qw(exposure-mask
+							  pointer-motion-mask
+							  button-press-mask
+							  button-release-mask
+							  key-press-mask
+							  structure-mask
+							  property-change-mask
+							  scroll-mask)]);
+
+		return 0;
+	});
+
+	$self->signal_connect('motion_notify_event' => sub {
+		my ($view, $event) = @_;
+		my ($x, $y) = $view->window_to_buffer_coords('text', $event->x, $event->y);
+
+		$view->get_window('text')->set_cursor(
+			$view->get_iter_at_location($x, $y)->has_tag($view->get_buffer()->get_tag_table()->lookup("link")) ?
+			$url_cursor :
+			$cursor
+		);
+		return 0;
+	});
+}
 =pod
 
 =head1 NAME
@@ -65,108 +174,6 @@ Gtk2::PodViewer widgets inherit all the methods and properties of Gtk2::TextView
 
 creates and returns a new Gtk2::PodViewer widget.
 
-=cut
-
-sub new {
-	my $package = shift;
-	my $self = $package->SUPER::new;
-	$self->set_editable(0);
-	$self->set_wrap_mode('word');
-	$self->{parser} = Gtk2::PodViewer::Parser->new(buffer => $self->get_buffer);
-	$self->get_buffer->create_tag(
-		'bold',
-		weight		=> PANGO_WEIGHT_BOLD
-	);
-	$self->get_buffer->create_tag(
-		'italic',
-		style		=> 'italic',
-	);
-	$self->get_buffer->create_tag(
-		'word_wrap',
-		wrap_mode	=> 'word',
-	);
-	$self->get_buffer->create_tag(
-		'head1',
-		weight		=> PANGO_WEIGHT_BOLD,
-		size		=> 15 * Gtk2::Pango->scale,
-		wrap_mode	=> 'word',
-	);
-	$self->get_buffer->create_tag(
-		'head2',
-		weight		=> PANGO_WEIGHT_BOLD,
-		size		=> 12 * Gtk2::Pango->scale,
-		wrap_mode	=> 'word',
-	);
-	$self->get_buffer->create_tag(
-		'head3',
-		weight		=> PANGO_WEIGHT_BOLD,
-		size		=> 9 * Gtk2::Pango->scale,
-		wrap_mode	=> 'word',
-	);
-	$self->get_buffer->create_tag(
-		'head4',
-		weight		=> PANGO_WEIGHT_BOLD,
-		size		=> 6 * Gtk2::Pango->scale,
-		wrap_mode	=> 'word',
-	);
-	$self->get_buffer->create_tag(
-		'monospace',
-		family		=> 'monospace',
-		wrap_mode	=> 'none',
-	);
-	$self->get_buffer->create_tag(
-		'typewriter',
-		family		=> 'monospace',
-		wrap_mode	=> 'word',
-	);
-	$self->get_buffer->create_tag(
-		'link',
-		foreground	=> 'blue',
-		underline	=> 'single',
-		wrap_mode	=> 'word',
-	);
-	$self->get_buffer->create_tag(
-		'indented',
-		left_margin	=> 40,
-	);
-
-	my $cursor	= Gtk2::Gdk::Cursor->new('xterm');
-	my $url_cursor	= Gtk2::Gdk::Cursor->new('hand2');
-
-	$self->signal_connect('button_press_event', sub { $self->clicked(@_) ; return 0 });
-
-	$self->signal_connect_after('realize' => sub {
-		my ($view) = @_;
-
-		$view->get_window('text')->set_events([qw(exposure-mask
-							  pointer-motion-mask
-							  button-press-mask
-							  button-release-mask
-							  key-press-mask
-							  structure-mask
-							  property-change-mask
-							  scroll-mask)]);
-
-		return 0;
-	});
-
-	$self->signal_connect('motion_notify_event' => sub {
-		my ($view, $event) = @_;
-		my ($x, $y) = $view->window_to_buffer_coords('text', $event->x, $event->y);
-
-		$view->get_window('text')->set_cursor(
-			$view->get_iter_at_location($x, $y)->has_tag($view->get_buffer()->get_tag_table()->lookup("link")) ?
-			$url_cursor :
-			$cursor
-		);
-		return 0;
-	});
-
-	bless($self, $package);
-	return $self;
-}
-
-=pod
 
 =head1 ADDITIONAL METHODS
 
@@ -178,7 +185,7 @@ This clears the viewer's buffer and resets the iter. You should never need to us
 
 sub clear {
 	my $self = shift;
-	$self->get_buffer->set_text(undef);
+	$self->get_buffer->set_text('');
 	$self->{parser}{iter} = $self->get_buffer->get_iter_at_offset(0);
 	return 1;
 }
@@ -199,7 +206,7 @@ This returns an array of section headers. So for example, a POD document of the 
 
 would result in
 
-	@marks = ( 'NAME', 'SYNOPSIS');
+	@marks = ('NAME', 'SYNOPSIS');
 
 You can then use the contents of this array to create a document index.
 
@@ -244,13 +251,16 @@ sub jump_to {
 
 	$view->set_link_callback($callback);
 
-sets a callback function to be used when the user clicks on a hyperlink within the POD. This may be a section title, a document name, or a URL. The receiving function will be giving two arguments: a reference to the C<Gtk2::PodViewer> object, and a scalar containing the link text.
+sets a callback function to be used when the user clicks on a hyperlink within the POD.
+
+B<Warning:> this function is deprecated; use the C<link_clicked> signal instead.
 
 =cut
 
 sub set_link_callback {
 	my ($self, $callback) = @_;
-	$self->{link_callback} = $callback;
+	$self->signal_handler_disconnect($self->{link_callback}) if defined($self->{link_callback});
+	$self->{link_callback} = $self->signal_connect('link_clicked' => $callback);
 	return 1;
 }
 
@@ -258,7 +268,7 @@ sub set_link_callback {
 
 	$viewer->load($document);
 
-Loads a given document. C<$document> can be a perldoc name (eg., C<'perlvar'>), a module (eg. C<'IO::Scalar'>), a filename or the name of a Perl builtin function from L<perlfunc>. Documents are searched for in that order, that is, the L<perlvar> document will be loaded before a file called C<perlvar> in the curernt directory.
+Loads a given document. C<$document> can be a perldoc name (eg., C<'perlvar'>), a module (eg. C<'IO::Scalar'>), a filename or the name of a Perl builtin function from L<perlfunc>. Documents are searched for in that order, that is, the L<perlvar> document will be loaded before a file called C<perlvar> in the current directory.
 
 =cut
 
@@ -410,7 +420,7 @@ sub parser {
 }
 
 sub clicked {
-	my ($self, undef, $event) = @_;
+	my ($self, $event) = @_;
 	my ($x, $y) = $self->window_to_buffer_coords('widget', $event->get_coords);
 	my $iter = $self->get_iter_at_location($x, $y);
 	my $tag = $self->get_buffer->get_tag_table->lookup('link');
@@ -419,17 +429,31 @@ sub clicked {
 		LOOP: for (my $i = 0 ; $i < scalar(@{$self->parser->{links}}) ; $i++) {
 			my ($text,  $this_offset) = @{@{$self->parser->{links}}[$i]};
 			if ($offset > $this_offset && $offset < ($this_offset + length($text))) {
-				return &{$self->{link_callback}}($self, $text) if (defined($self->{link_callback}));
+				$self->signal_emit('link_clicked', $text);
 				last LOOP;
 			}
 		}
 	}
-	return 1;
 }
 
 =pod
 
-=head1 The podviewer PROGRAM
+=head1 SIGNALS
+
+Gtk2::PodViewer inherits all of Gtk2::TextView's signals, and has the following:
+
+=head2 The 'link_clicked' signal
+
+	$viewer->signal_connect('link_clicked', \&clicked);
+
+	sub clicked {
+		my ($viewer, $link_text) = @_;
+		print "user clicked on '$link_text'\n";
+	}
+
+Emitted when the user clicks on a hyperlink within the POD. This may be a section title, a document name, or a URL. The receiving function will be giving two arguments: a reference to the Gtk2::PodViewer object, and a scalar containing the link text.
+
+=head1 THE podviewer PROGRAM
 
 C<podviewer> is installed with Gtk2::PodViewer. It is a simple Pod viewing program. It is pretty minimal, but does do the job quite well.
 
