@@ -2,7 +2,7 @@
 # Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. 
-# $Id: podviewer,v 1.25 2004/03/29 20:48:10 jodrell Exp $
+# $Id: podviewer,v 1.27 2004/04/26 16:26:54 jodrell Exp $
 use lib 'lib/';
 use Gtk2 -init;
 use Gtk2::PodViewer;
@@ -261,6 +261,33 @@ $window->signal_connect('delete_event', \&close_program);
 $window->add_accel_group($accels);
 $window->add($vbox);
 
+$window->set_icon($window->render_icon('gtk-dnd', 'dialog'));
+
+my $MAXIMIZED  = 0;
+my $FULLSCREEN = 0;
+$window->signal_connect('window-state-event', sub {
+	my $mask = $_[1]->changed_mask;
+	if ("$mask" eq '[ withdrawn ]') {
+		$MAXIMIZED  = 0;
+		$FULLSCREEN = 0;
+	} elsif ("$mask" eq '[ maximized ]') {
+		if ($MAXIMIZED == 1) {
+			$MAXIMIZED  = 0;
+		} else {
+			$MAXIMIZED  = 1;
+		}
+		$FULLSCREEN = 0;
+	} elsif ("$mask" eq '[ fullscreen ]') {
+		$MAXIMIZED  = 0;
+		if ($FULLSCREEN == 1) {
+			$FULLSCREEN  = 0;
+		} else {
+			$FULLSCREEN  = 1;
+		}
+	} else {
+		print STDERR "unknown mask: $mask\n";
+	}
+});
 $window->show_all;
 
 if ($CONFIG{pane_vis} != 1) {
@@ -279,24 +306,76 @@ blank_status();
 $combo->entry->set_text(($ARGV[0] ne '' ? $ARGV[0] : $CONFIG{home}));
 load();
 
+$window->maximize if ($CONFIG{maximized} == 1);
+
 Gtk2->main;
 
 exit;
 
 sub browse {
-	my $selection = Gtk2::FileSelection->new('Select File');
-	$selection->set_filename($combo->entry->get_text) if (-e $combo->entry->get_text);
-	$selection->signal_connect('response', sub {
+	my $dialog = Gtk2::Dialog->new;
+	$dialog->set_title('Open Document');
+	$dialog->set_modal(1);
+	$dialog->add_buttons(
+		'gtk-cancel'	=> 'cancel',
+		'gtk-ok'	=> 'ok',
+	);
+	$dialog->set_resizable(0);
+	$dialog->set_icon($window->get_icon);
+
+	my $label = Gtk2::Label->new('Enter the builtin function, perl module, or filename that you wish to view:');
+	$label->set_line_wrap(1);
+	my $alignment = Gtk2::Alignment->new(0, 0, 0, 0);
+	$alignment->add($label);
+
+	my $open_combo = Gtk2::Combo->new;
+	$open_combo->set_popdown_strings(@HISTORY);
+	$open_combo->entry->set_text($combo->entry->get_text);
+	$open_combo->disable_activate;
+	$open_combo->entry->signal_connect('activate', sub { $dialog->response('ok') });
+
+	my $button = Gtk2::Button->new;
+	$button->add(Gtk2::Alignment->new(0.5, 0.5, 0, 0));
+	$button->child->add(Gtk2::HBox->new);
+	$button->child->child->pack_start(Gtk2::Image->new_from_stock('gtk-open', 'button'), 0, 0, 0);
+	$button->child->child->pack_start(Gtk2::Label->new('Browse...'), 1, 1, 0);
+	$button->signal_connect('clicked', sub {
+		my $selection = Gtk2::FileSelection->new('Select File');
+		$selection->set_icon($window->get_icon);
+		$selection->set_filename($open_combo->entry->get_text) if (-e $open_combo->entry->get_text);
+		$selection->signal_connect('response', sub {
+			if ($_[1] eq 'ok') {
+				$open_combo->entry->set_text($selection->get_filename);
+				$selection->destroy;
+			} else {
+				$selection->destroy;
+			}
+		});
+		$selection->run;
+		return 1;
+	});
+
+	my $table = Gtk2::Table->new(2, 2);
+	$table->set_border_width(6);
+	$table->set_col_spacings(12);
+	$table->set_row_spacings(12);
+	$table->attach_defaults($alignment,	0, 2, 0, 1);
+	$table->attach_defaults($open_combo,	0, 1, 1, 2);
+	$table->attach_defaults($button,	1, 2, 1, 2);
+
+	$dialog->vbox->pack_start($table, 1, 1, 0);
+	$dialog->signal_connect('response', sub {
 		if ($_[1] eq 'ok') {
-			$combo->entry->set_text($selection->get_filename);
-			$selection->destroy;
+			$combo->entry->set_text($open_combo->entry->get_text());
+			$dialog->destroy;
 			load();
 		} else {
-			$selection->destroy;
+			$dialog->destroy;
 		}
 	});
-	$selection->run;
-	return 1;
+
+	$open_combo->entry->grab_focus;
+	$dialog->show_all;
 }
 
 sub strippod {
@@ -327,6 +406,8 @@ sub load {
 		$viewer->get_window('text')->set_cursor($NORMAL_CURSOR);
 		$combo->entry->set_text('');
 		$window->set_title($NAME);
+		$browse_button->set_sensitive(1);
+		blank_status();
 	} elsif ($viewer->load($text)) {
 		$viewer->get_buffer->move_mark(
 			$viewer->get_buffer->get_mark('insert'),
@@ -366,6 +447,7 @@ sub load {
 		$window->window->set_cursor($NORMAL_CURSOR);
 		$viewer->get_window('text')->set_cursor($NORMAL_CURSOR);
 		my $dialog = Gtk2::MessageDialog->new($window, 'modal', 'error', 'ok', "Couldn't find a POD document for '$text'.");
+		$dialog->set_icon($window->get_icon);
 		$dialog->signal_connect('response', sub { $dialog->destroy });
 		blank_status();
 		$browse_button->set_sensitive(1);
@@ -393,9 +475,21 @@ sub save_history {
 }
 
 sub save_options {
+
+	$window->unfullscreen;
+	$window->unmaximize;
+	Gtk2->main_iteration while (Gtk2->events_pending);
+
 	$CONFIG{pane_vis} = ($index_button->get_active ? 1 : 0);
 	$CONFIG{pane_pos} = $pane->get_position;
-	($CONFIG{x}, $CONFIG{y}) = $window->get_size;
+
+	if ($MAXIMIZED == 1) {
+		$CONFIG{maximized} = 1;
+	} else {
+		$CONFIG{maximized} = 0;
+		($CONFIG{x}, $CONFIG{y}) = $window->get_size if ($FULLSCREEN == 0);
+	}
+
 	open(RCFILE, ">$RCFILE");
 	foreach my $key (sort keys %CONFIG) {
 		print RCFILE "$key=$CONFIG{$key}\n";
@@ -406,6 +500,7 @@ sub save_options {
 
 sub about {
 	my $about = Gtk2::Dialog->new;
+	$about->set_icon($window->get_icon);
 	$about->set_resizable(0);
 	my $label = Gtk2::Label->new;
 	my $browser_string = ($BROWSER ne '' ? "$NAME will use '".basename($BROWSER)."' for URLs" : 'no browser defined.');
@@ -552,6 +647,7 @@ sub do_search {
 	$window->window->set_cursor($NORMAL_CURSOR);
 	$viewer->get_window('text')->set_cursor($NORMAL_CURSOR);
 	my $dialog = Gtk2::MessageDialog->new($window, 'modal', 'info', 'ok', "The string '$str' was not found.");
+	$dialog->set_icon($window->get_icon);
 	$dialog->signal_connect('response', sub { $dialog->destroy });
 	$dialog->run;
 	return undef;
@@ -566,6 +662,7 @@ sub search_dialog {
 	$table->attach_defaults(Gtk2::Label->new('Enter search string:'), 1, 2, 0, 1);
 	$table->attach_defaults($entry, 1, 2, 1, 2);
 	my $dialog = Gtk2::Dialog->new;
+	$dialog->set_icon($window->get_icon);
 	$dialog->set_title('Find');
 	$dialog->set_modal(1);
 	$dialog->add_buttons('gtk-cancel' => 1, 'gtk-ok' => 0);
@@ -608,6 +705,7 @@ sub link_clicked {
 			system(sprintf('%s %s &', $BROWSER, quotemeta($text)));
 		} else {
 			my $dialog = Gtk2::MessageDialog->new($window, 'modal', 'error', 'ok', "Couldn't find a web browser. Consider setting the \$BROWSER variable.");
+			$dialog->set_icon($window->get_icon);
 			$dialog->signal_connect('response', sub { $dialog->destroy });
 			$dialog->run;
 		}
@@ -675,7 +773,7 @@ This toggles the document index.
 
 =item * C<Ctrl-O>
 
-This pops up a file selection dialog allowing you to choose a file to read.
+This pops up a dialog allowing you to choose a document to read.
 
 =item * C<Ctrl-R> or C<F5>
 
