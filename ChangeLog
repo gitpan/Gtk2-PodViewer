@@ -1,0 +1,65 @@
+2003-09-12 17:15  jodrell
+
+	* README: readme.
+
+2003-09-12 17:11  jodrell
+
+	* lib/Gtk2/PodViewer.pm, lib/Gtk2/PodViewer/Parser.pm,
+	src/podviewer: more bugfixes.
+
+2003-09-12 14:51  jodrell
+
+	* lib/Gtk2/PodViewer.pm, lib/Gtk2/PodViewer/Parser.pm,
+	src/podviewer: fixed scrolling bug - fixed markers. fixed lots. i
+	fixed stuff! OK?
+
+2003-09-11 20:04  jodrell
+
+	* src/podviewer: fixed silly bug.
+
+2003-09-10 16:28  jodrell
+
+	* lib/Gtk2/PodViewer.pm, lib/Gtk2/PodViewer/Parser.pm,
+	src/podviewer: sort of fixed wrapping - thing there might be an
+	issue with textview tho.
+
+2003-09-10 14:56  jodrell
+
+	* lib/Gtk2/PodViewer.pm, lib/Gtk2/PodViewer/Parser.pm,
+	src/podviewer: more stuff.
+
+2003-09-10 12:26  jodrell
+
+	* lib/Gtk2/PodViewer.pm, lib/Gtk2/PodViewer/Parser.pm,
+	src/podviewer: merged torsten's patch to fix entity rendering,
+	added an index pane to the viewer, and a preferences system.
+
+2003-09-09 17:45  jodrell
+
+	* Makefile.PL, lib/Gtk2/PodViewer.pm, lib/Gtk2/PodViewer/Parser.pm,
+	src/podviewer: bugfixes from torsten, reorganised things.
+
+2003-09-09 13:20  jodrell
+
+	* Makefile.PL, lib/Gtk2/PodViewer.pm, lib/Gtk2/PodViewer/Parser.pm,
+	src/podviewer: documentation and loads of new stuff.
+
+2003-09-08 14:07  jodrell
+
+	* lib/Gtk2/PodViewer.pm, src/podviewer: handles builtins now. yay!
+
+2003-07-24 17:30  jodrell
+
+	* lib/Gtk2/PodViewer.pm, lib/Gtk2/PodViewer/Parser.pm,
+	src/podviewer: improved parsing. improved UI.
+
+2003-07-24 16:31  jodrell
+
+	* lib/Gtk2/PodViewer.pm, lib/Gtk2/PodViewer/Parser.pm,
+	src/podviewer: Initial revision
+
+2003-07-24 16:31  jodrell
+
+	* lib/Gtk2/PodViewer.pm, lib/Gtk2/PodViewer/Parser.pm,
+	src/podviewer: Initial import
+
