@@ -1,4 +1,4 @@
-# $Id: Parser.pm,v 1.14 2004/03/10 21:47:56 jodrell Exp $
+# $Id: Parser.pm,v 1.15 2004/03/11 13:44:22 jodrell Exp $
 # Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. package Gtk2::PodViewer::Parser;
@@ -93,7 +93,6 @@ sub insert_text {
 		F	=> 'italic',
 		S	=> 'monospace',
 		E	=> 'word_wrap',
-		X	=> undef,
 	);
 	my %entities = (
 		lt	=> '<',
@@ -118,7 +117,7 @@ sub insert_text {
 						} elsif ($command eq 'L') {
 							push(@{$parser->{links}}, [$text, $parser->{iter}->get_offset]);
 						}
-						if (!defined($tagnames{$command})) {
+						if (!exists($tagnames{$command})) {
 							warn("warning: unknown formatting code '$command'\n");
 						} else {
 							$parser->{buffer}->insert_with_tags_by_name($parser->{iter}, $text, $tagnames{$command}, @tags);

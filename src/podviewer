@@ -2,7 +2,7 @@
 # Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. 
-# $Id: podviewer,v 1.20 2004/03/10 21:52:20 jodrell Exp $
+# $Id: podviewer,v 1.25 2004/03/29 20:48:10 jodrell Exp $
 use lib 'lib/';
 use Gtk2 -init;
 use Gtk2::PodViewer;
@@ -21,6 +21,13 @@ my $RCFILE 	 = sprintf('%s/.%src',		$ENV{HOME}, $SNAME);
 my $SEARCH_OFFSET = 0;
 my $LAST_SEARCH_STR;
 
+my $BLANK_STRING = 'podviewer:blank';
+
+# navigation breadcrumbs
+my @BACK_BREADCRUMBS = ();
+my @FORWARD_BREADCRUMBS = ();
+
+# history for the combo entry
 my @HISTORY;
 if (open(HISTORY_FILE, $HISTORY_FILE)) {
 	while (<HISTORY_FILE>) {
@@ -36,6 +43,7 @@ my %CONFIG = (
 	icon_size	=> 'large-toolbar',
 	x		=> 600,
 	y		=> 500,
+	home		=> $BLANK_STRING,
 );
 
 if (open(RCFILE, $RCFILE)) {
@@ -46,8 +54,6 @@ if (open(RCFILE, $RCFILE)) {
 	}
 	close(RCFILE);
 }
-
-chomp(my $PREFIX = `gtk-config --prefix 2> /dev/null`);
 
 chomp (my $htmlview = `which htmlview 2> /dev/null`);
 chomp (my $gnome_moz_remote = `which gnome-moz-remote 2> /dev/null`);
@@ -64,19 +70,34 @@ if (defined($ENV{BROWSER})) {
 my $NORMAL_CURSOR	= Gtk2::Gdk::Cursor->new('left_ptr');
 my $BUSY_CURSOR		= Gtk2::Gdk::Cursor->new('watch');
 
-my $iconfile = sprintf('%s/share/pixmaps/documents.png', $PREFIX);
-
 my $idx_pbf = Gtk2::Image->new->render_icon('gtk-jump-to', 'menu');
 
 my $tips   = Gtk2::Tooltips->new;
 my $accels = Gtk2::AccelGroup->new;
+
+my $back_button = Gtk2::Button->new;
+$back_button->add(Gtk2::Image->new_from_stock('gtk-go-back', $CONFIG{icon_size}));
+$back_button->set_relief('none');
+$back_button->signal_connect('clicked', \&go_back);
+$back_button->add_accelerator('clicked', $accels, $Gtk2::Gdk::Keysyms{Left}, 'mod1-mask', 'visible');
+$tips->set_tip($back_button, 'Go back (Alt-Left)');
+$back_button->set_sensitive(0); # no breadcrumbs at startup
 
 my $up_button = Gtk2::Button->new;
 $up_button->add(Gtk2::Image->new_from_stock('gtk-go-up', $CONFIG{icon_size}));
 $up_button->set_relief('none');
 $up_button->signal_connect('clicked', \&go_up);
 $up_button->add_accelerator('clicked', $accels, ord('u'), 'control-mask', 'visible');
+$up_button->add_accelerator('clicked', $accels, $Gtk2::Gdk::Keysyms{Up}, 'mod1-mask', 'visible');
 $tips->set_tip($up_button, 'Go up a level (Ctrl-U)');
+
+my $forward_button = Gtk2::Button->new;
+$forward_button->add(Gtk2::Image->new_from_stock('gtk-go-forward', $CONFIG{icon_size}));
+$forward_button->set_relief('none');
+$forward_button->signal_connect('clicked', \&go_forward);
+$forward_button->add_accelerator('clicked', $accels, $Gtk2::Gdk::Keysyms{Right}, 'mod1-mask', 'visible');
+$tips->set_tip($forward_button, 'Forward (Alt-Right)');
+$forward_button->set_sensitive(0); # no breadcrumbs at startup
 
 my $home_button = Gtk2::Button->new;
 $home_button->add(Gtk2::Image->new_from_stock('gtk-home', $CONFIG{icon_size}));
@@ -100,8 +121,9 @@ $tips->set_tip($browse_button, 'Select a file to display (Ctrl-0)');
 
 my $combo = Gtk2::Combo->new;
 $combo->disable_activate;
-$combo->entry->signal_connect('activate', \&load);
+$combo->entry->signal_connect('activate', \&load, 1);
 $combo->set_popdown_strings(@HISTORY);
+$combo->set_case_sensitive(1);
 $combo->entry->set_text(undef);
 $tips->set_tip($combo->entry, 'Enter a perldoc, module, file or function');
 
@@ -110,6 +132,7 @@ $load_button->add(Gtk2::Image->new_from_stock('gtk-jump-to', $CONFIG{icon_size})
 $load_button->set_relief('none');
 $load_button->signal_connect('clicked', \&load);
 $load_button->add_accelerator('clicked', $accels, ord('r'), 'control-mask', 'visible');
+$load_button->add_accelerator('clicked', $accels, Gtk2::Accelerator->parse('F5'), 'visible');
 $tips->set_tip($load_button, 'Load the selected document (Ctrl-R)');
 
 my $about_button = Gtk2::Button->new;
@@ -155,7 +178,6 @@ $search_again_button->add_accelerator('clicked', $accels, ord('g'), 'control-mas
 
 my $help_button = Gtk2::Button->new;
 $help_button->signal_connect('clicked', \&load_help);
-#$help_button->add_accelerator('clicked', $accels, $Gtk2::Gdk::Keysyms{'F1'}, 'none', 'visible');
 $help_button->add_accelerator('clicked', $accels, Gtk2::Accelerator->parse('F1'), 'visible');
 
 my $index = Gtk2::SimpleList->new('icon' => 'pixbuf',
@@ -206,7 +228,9 @@ $pane->add2($viewer_scrwin);
 my $hbox = Gtk2::HBox->new;
 $hbox->set_spacing(6);
 
+$hbox->pack_start($back_button,                  0, 0, 0);
 $hbox->pack_start($up_button,                    0, 0, 0);
+$hbox->pack_start($forward_button,               0, 0, 0);
 $hbox->pack_start($home_button,                  0, 0, 0) unless ($CONFIG{home} eq '');
 $hbox->pack_start($index_button,                 0, 0, 0);
 $hbox->pack_start($browse_button,                0, 0, 0);
@@ -237,10 +261,6 @@ $window->signal_connect('delete_event', \&close_program);
 $window->add_accel_group($accels);
 $window->add($vbox);
 
-if (-e $iconfile) {
-	$window->set_icon(Gtk2::Gdk::Pixbuf->new_from_file($iconfile));
-}
-
 $window->show_all;
 
 if ($CONFIG{pane_vis} != 1) {
@@ -265,9 +285,6 @@ exit;
 
 sub browse {
 	my $selection = Gtk2::FileSelection->new('Select File');
-	if (-e $iconfile) {
-		$selection->set_icon(Gtk2::Gdk::Pixbuf->new_from_file($iconfile));
-	}
 	$selection->set_filename($combo->entry->get_text) if (-e $combo->entry->get_text);
 	$selection->signal_connect('response', sub {
 		if ($_[1] eq 'ok') {
@@ -290,6 +307,7 @@ sub strippod {
 }
 
 sub load {
+	my $FORWARD_HISTORY_RESET = shift;
 	my $text = $combo->entry->get_text;
 	$text =~ s/^\s+//g;
 	$text =~ s/\s+$//g;
@@ -303,7 +321,13 @@ sub load {
 	$browse_button->set_sensitive(0);
 	$load_button->set_sensitive(0);
 	$up_button->set_sensitive(0);
-	if ($viewer->load($text)) {
+	if ($text eq $BLANK_STRING) {
+		$viewer->clear;
+		$window->window->set_cursor($NORMAL_CURSOR);
+		$viewer->get_window('text')->set_cursor($NORMAL_CURSOR);
+		$combo->entry->set_text('');
+		$window->set_title($NAME);
+	} elsif ($viewer->load($text)) {
 		$viewer->get_buffer->move_mark(
 			$viewer->get_buffer->get_mark('insert'),
 			$viewer->get_buffer->get_iter_at_line(0)
@@ -332,15 +356,16 @@ sub load {
 			$up_button->set_sensitive(1);
 		}
 		$SEARCH_OFFSET = 0;
+		push(@BACK_BREADCRUMBS, $text);
+		@FORWARD_BREADCRUMBS = () if ($FORWARD_HISTORY_RESET == 1);
+		$back_button->set_sensitive(1 < scalar(@BACK_BREADCRUMBS));
+		$forward_button->set_sensitive(0 < scalar(@FORWARD_BREADCRUMBS));
 		$viewer->grab_focus;
 		return 1;
 	} else {
 		$window->window->set_cursor($NORMAL_CURSOR);
 		$viewer->get_window('text')->set_cursor($NORMAL_CURSOR);
 		my $dialog = Gtk2::MessageDialog->new($window, 'modal', 'error', 'ok', "Couldn't find a POD document for '$text'.");
-		if (-e $iconfile) {
-			$dialog->set_icon(Gtk2::Gdk::Pixbuf->new_from_file($iconfile));
-		}
 		$dialog->signal_connect('response', sub { $dialog->destroy });
 		blank_status();
 		$browse_button->set_sensitive(1);
@@ -401,9 +426,6 @@ END
 	$label->set_markup($markup);
 	$label->set_justify('center');
 	$label->set_line_wrap(1);
-	if (-e $iconfile) {
-		$about->set_icon(Gtk2::Gdk::Pixbuf->new_from_file($iconfile));
-	}
 	$about->set_title('About Pod Viewer');
 	$about->set_border_width(8);
 	$about->add_buttons('gtk-help' => 'help', 'gtk-ok' => 'ok');
@@ -436,12 +458,29 @@ sub set_status {
 	return 1;
 }
 
+sub go_back {
+	unshift(@FORWARD_BREADCRUMBS, pop(@BACK_BREADCRUMBS)); # put the current into the front of the forward array
+	my $location = pop(@BACK_BREADCRUMBS); # this is previous
+	return undef unless ($location);
+	$combo->entry->set_text($location);
+	load();
+	return 1;
+}
+
 sub go_up {
 	my $location = $combo->entry->get_text;
 	return undef unless ($location =~ /::/);
 	my @parts = split(/::/, $location);
 	pop(@parts);
 	$combo->entry->set_text(join('::', @parts));
+	load();
+	return 1;
+}
+
+sub go_forward {
+	my $location = shift(@FORWARD_BREADCRUMBS);
+	return undef unless ($location);
+	$combo->entry->set_text($location);
 	load();
 	return 1;
 }
@@ -468,6 +507,7 @@ sub do_search {
 	}
 	set_status('Searching...');
 	$window->window->set_cursor($BUSY_CURSOR);
+	$viewer->get_window('text')->set_cursor($BUSY_CURSOR);
 
 	my $doc = $viewer->get_buffer->get_text(
 		$viewer->get_buffer->get_start_iter,
@@ -510,6 +550,7 @@ sub do_search {
 	blank_status();
 	$SEARCH_OFFSET = 0;
 	$window->window->set_cursor($NORMAL_CURSOR);
+	$viewer->get_window('text')->set_cursor($NORMAL_CURSOR);
 	my $dialog = Gtk2::MessageDialog->new($window, 'modal', 'info', 'ok', "The string '$str' was not found.");
 	$dialog->signal_connect('response', sub { $dialog->destroy });
 	$dialog->run;
@@ -567,9 +608,6 @@ sub link_clicked {
 			system(sprintf('%s %s &', $BROWSER, quotemeta($text)));
 		} else {
 			my $dialog = Gtk2::MessageDialog->new($window, 'modal', 'error', 'ok', "Couldn't find a web browser. Consider setting the \$BROWSER variable.");
-			if (-e $iconfile) {
-				$dialog->set_icon(Gtk2::Gdk::Pixbuf->new_from_file($iconfile));
-			}
 			$dialog->signal_connect('response', sub { $dialog->destroy });
 			$dialog->run;
 		}
@@ -615,9 +653,17 @@ C<podviewer> supports a wide number of keyboard shortcuts. They are documented h
 
 =over
 
-=item * C<Ctrl-U>
+=item * C<Ctrl-U> or C<Alt-Up>
 
 Go up a level. That is, if you're reading the documentation for C<Foo::Bar>, typing C<Ctrl-U> will take you to the C<Foo> page.
+
+=item * C<Alt-Left>
+
+Go back in your browsing history.
+
+=item * C<Alt-Right>
+
+Go forward in your browsing history.
 
 =item * C<Ctrl-H>
 
@@ -631,7 +677,7 @@ This toggles the document index.
 
 This pops up a file selection dialog allowing you to choose a file to read.
 
-=item * C<Ctrl-R>
+=item * C<Ctrl-R> or C<F5>
 
 This reloads the current document.
 
