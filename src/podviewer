@@ -2,7 +2,7 @@
 # Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. 
-# $Id: podviewer,v 1.27 2004/04/26 16:26:54 jodrell Exp $
+# $Id: podviewer,v 1.29 2004/05/21 10:05:07 jodrell Exp $
 use lib 'lib/';
 use Gtk2 -init;
 use Gtk2::PodViewer;
@@ -340,7 +340,18 @@ sub browse {
 	$button->child->child->pack_start(Gtk2::Image->new_from_stock('gtk-open', 'button'), 0, 0, 0);
 	$button->child->child->pack_start(Gtk2::Label->new('Browse...'), 1, 1, 0);
 	$button->signal_connect('clicked', sub {
-		my $selection = Gtk2::FileSelection->new('Select File');
+		my $selection;
+		if ('' ne (my $msg = Gtk2->check_version (2, 4, 0)) or $Gtk2::VERSION < 1.040) {
+			$selection = Gtk2::FileSelection->new('Select File');
+		} else {
+			$selection = Gtk2::FileChooserDialog->new(
+				'Select File',
+				$window,
+				'open',
+				'gtk-cancel'	=> 'cancel',
+				'gtk-ok' 	=> 'ok'
+			);
+		}
 		$selection->set_icon($window->get_icon);
 		$selection->set_filename($open_combo->entry->get_text) if (-e $open_combo->entry->get_text);
 		$selection->signal_connect('response', sub {
@@ -401,12 +412,13 @@ sub load {
 	$load_button->set_sensitive(0);
 	$up_button->set_sensitive(0);
 	if ($text eq $BLANK_STRING) {
+		$combo->entry->set_text('');
 		$viewer->clear;
 		$window->window->set_cursor($NORMAL_CURSOR);
 		$viewer->get_window('text')->set_cursor($NORMAL_CURSOR);
-		$combo->entry->set_text('');
 		$window->set_title($NAME);
 		$browse_button->set_sensitive(1);
+		@{$index->{data}} = ();
 		blank_status();
 	} elsif ($viewer->load($text)) {
 		$viewer->get_buffer->move_mark(

@@ -1,11 +1,128 @@
-# $Id: Parser.pm,v 1.15 2004/03/11 13:44:22 jodrell Exp $
+# $Id: Parser.pm,v 1.16 2004/08/31 16:21:39 jodrell Exp $
 # Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. package Gtk2::PodViewer::Parser;
 package Gtk2::PodViewer::Parser;
 use base 'Pod::Parser';
 use IO::Scalar;
+use vars qw(%ENTITIES);
+use Exporter;
+use Locale::gettext;
 use strict;
+
+our @EXPORT_OK = qw(&decode_entities);
+
+# This table is taken near verbatim from Pod::PlainText in Pod::Parser, which
+# got it near verbatim from the original Pod::Text.  It is therefore credited
+# to Tom Christiansen, and I'm glad I didn't have to write it.  :)  "iexcl" to
+# "divide" added by Tim Jenness.
+our %ENTITIES	= (
+	'amp'		=>	'&',		# ampersand
+	'apos'		=>	"'",		# apostrophe
+	'lt'		=>	'<',		# left chevron, less-than
+	'gt'		=>	'>',		# right chevron, greater-than
+	'quot'		=>	'"',		# double quote
+	'sol'		=>	'/',		# solidus (forward slash)
+	'verbar'	=>	'|',		# vertical bar
+	"Aacute"	=>	"\xC1",		# capital A, acute accent
+	"aacute"	=>	"\xE1",		# small a, acute accent
+	"Acirc"		=>	"\xC2",		# capital A, circumflex accent
+	"acirc"		=>	"\xE2",		# small a, circumflex accent
+	"AElig"		=>	"\xC6",		# capital AE diphthong (ligature)
+	"aelig"		=>	"\xE6",		# small ae diphthong (ligature)
+	"Agrave"	=>	"\xC0",		# capital A, grave accent
+	"agrave"	=>	"\xE0",		# small a, grave accent
+	"Aring"		=>	"\xC5",		# capital A, ring
+	"aring"		=>	"\xE5",		# small a, ring
+	"Atilde"	=>	"\xC3",		# capital A, tilde
+	"atilde"	=>	"\xE3",		# small a, tilde
+	"Auml"		=>	"\xC4",		# capital A, dieresis or umlaut mark
+	"auml"		=>	"\xE4",		# small a, dieresis or umlaut mark
+	"Ccedil"	=>	"\xC7",		# capital C, cedilla
+	"ccedil"	=>	"\xE7",		# small c, cedilla
+	"Eacute"	=>	"\xC9",		# capital E, acute accent
+	"eacute"	=>	"\xE9",		# small e, acute accent
+	"Ecirc"		=>	"\xCA",		# capital E, circumflex accent
+	"ecirc"		=>	"\xEA",		# small e, circumflex accent
+	"Egrave"	=>	"\xC8",		# capital E, grave accent
+	"egrave"	=>	"\xE8",		# small e, grave accent
+	"ETH"		=>	"\xD0",		# capital Eth, Icelandic
+	"eth"		=>	"\xF0",		# small eth, Icelandic
+	"Euml"		=>	"\xCB",		# capital E, dieresis or umlaut mark
+	"euml"		=>	"\xEB",		# small e, dieresis or umlaut mark
+	"Iacute"	=>	"\xCD",		# capital I, acute accent
+	"iacute"	=>	"\xED",		# small i, acute accent
+	"Icirc"		=>	"\xCE",		# capital I, circumflex accent
+	"icirc"		=>	"\xEE",		# small i, circumflex accent
+	"Igrave"	=>	"\xCC",		# capital I, grave accent
+	"igrave"	=>	"\xEC",		# small i, grave accent
+	"Iuml"		=>	"\xCF",		# capital I, dieresis or umlaut mark
+	"iuml"		=>	"\xEF",		# small i, dieresis or umlaut mark
+	"Ntilde"	=>	"\xD1",		# capital N, tilde
+	"ntilde"	=>	"\xF1",		# small n, tilde
+	"Oacute"	=>	"\xD3",		# capital O, acute accent
+	"oacute"	=>	"\xF3",		# small o, acute accent
+	"Ocirc"		=>	"\xD4",		# capital O, circumflex accent
+	"ocirc"		=>	"\xF4",		# small o, circumflex accent
+	"Ograve"	=>	"\xD2",		# capital O, grave accent
+	"ograve"	=>	"\xF2",		# small o, grave accent
+	"Oslash"	=>	"\xD8",		# capital O, slash
+	"oslash"	=>	"\xF8",		# small o, slash
+	"Otilde"	=>	"\xD5",		# capital O, tilde
+	"otilde"	=>	"\xF5",		# small o, tilde
+	"Ouml"		=>	"\xD6",		# capital O, dieresis or umlaut mark
+	"ouml"		=>	"\xF6",		# small o, dieresis or umlaut mark
+	"szlig"		=>	"\xDF",		# small sharp s, German (sz ligature)
+	"THORN"		=>	"\xDE",		# capital THORN, Icelandic
+	"thorn"		=>	"\xFE",		# small thorn, Icelandic
+	"Uacute"	=>	"\xDA",		# capital U, acute accent
+	"uacute"	=>	"\xFA",		# small u, acute accent
+	"Ucirc"		=>	"\xDB",		# capital U, circumflex accent
+	"ucirc"		=>	"\xFB",		# small u, circumflex accent
+	"Ugrave"	=>	"\xD9",		# capital U, grave accent
+	"ugrave"	=>	"\xF9",		# small u, grave accent
+	"Uuml"		=>	"\xDC",		# capital U, dieresis or umlaut mark
+	"uuml"		=>	"\xFC",		# small u, dieresis or umlaut mark
+	"Yacute"	=>	"\xDD",		# capital Y, acute accent
+	"yacute"	=>	"\xFD",		# small y, acute accent
+	"yuml"		=>	"\xFF",		# small y, dieresis or umlaut mark
+	"laquo"		=>	"\xAB",		# left pointing double angle quotation mark
+	"lchevron"	=>	"\xAB",		# synonym (backwards compatibility)
+	"raquo"		=>	"\xBB",		# right pointing double angle quotation mark
+	"rchevron"	=>	"\xBB",		# synonym (backwards compatibility)
+	"iexcl"		=>	"\xA1",		# inverted exclamation mark
+	"cent"		=>	"\xA2",		# cent sign
+	"pound"		=>	"\xA3",		# (UK) pound sign
+	"curren"	=>	"\xA4",		# currency sign
+	"yen"		=>	"\xA5",		# yen sign
+	"brvbar"	=>	"\xA6",		# broken vertical bar
+	"sect"		=>	"\xA7",		# section sign
+	"uml"		=>	"\xA8",		# diaresis
+	"copy"		=>	"\xA9",		# Copyright symbol
+	"ordf"		=>	"\xAA",		# feminine ordinal indicator
+	"not"		=>	"\xAC",		# not sign
+	"shy"		=>	'',		# soft (discretionary) hyphen
+	"reg"		=>	"\xAE",		# registered trademark
+	"macr"		=>	"\xAF",		# macron, overline
+	"deg"		=>	"\xB0",		# degree sign
+	"plusmn"	=>	"\xB1",		# plus-minus sign
+	"sup2"		=>	"\xB2",		# superscript 2
+	"sup3"		=>	"\xB3",		# superscript 3
+	"acute"		=>	"\xB4",		# acute accent
+	"micro"		=>	"\xB5",		# micro sign
+	"para"		=>	"\xB6",		# pilcrow sign	= paragraph sign
+	"middot"	=>	"\xB7",		# middle dot	= Georgian comma
+	"cedil"		=>	"\xB8",		# cedilla
+	"sup1"		=>	"\xB9",		# superscript 1
+	"ordm"		=>	"\xBA",		# masculine ordinal indicator
+	"frac14"	=>	"\xBC",		# vulgar fraction one quarter
+	"frac12"	=>	"\xBD",		# vulgar fraction one half
+	"frac34"	=>	"\xBE",		# vulgar fraction three quarters
+	"iquest"	=>	"\xBF",		# inverted question mark
+	"times"		=>	"\xD7",		# multiplication sign
+	"divide"	=>	"\xF7",		# division sign
+	"nbsp"		=>	"\x01",		# non-breaking space
+);
 
 =pod
 
@@ -93,12 +210,8 @@ sub insert_text {
 		F	=> 'italic',
 		S	=> 'monospace',
 		E	=> 'word_wrap',
-	);
-	my %entities = (
-		lt	=> '<',
-		gt	=> '>',
-		verbar	=> '|',
-		sol	=> '/',
+		X	=> 'normal',
+		Z	=> 'normal',
 	);
 
 	$parser->parse_text(
@@ -107,24 +220,33 @@ sub insert_text {
 				my ($parser, $ptree) = @_;
 
 				foreach ($ptree->children) {
-					if (ref($_) eq "Pod::InteriorSequence") {
+					if (ref($_) eq 'Pod::InteriorSequence') {
 						my $sequence = $_;
 						my $command = $sequence->cmd_name;
 						my $text = $sequence->parse_tree->raw_text;
 
 						if ($command eq 'E') {
-							$text = $entities{$text} || $text;
+							$text = $ENTITIES{$text} || $text;
 						} elsif ($command eq 'L') {
 							push(@{$parser->{links}}, [$text, $parser->{iter}->get_offset]);
+
+							if ($text =~ /\|/) {
+								($text, undef) = split(/\|/, $text, 2);
+							}
+
+							if ($text =~ /\/[^:]/ && $text !~ /:\/\//) {
+								my ($doc, $section) = split(/\//, $text, 2);
+								$text = sprintf(gettext('%s in the %s manpage'), $section, $doc);
+							}
 						}
 						if (!exists($tagnames{$command})) {
 							warn("warning: unknown formatting code '$command'\n");
 						} else {
-							$parser->{buffer}->insert_with_tags_by_name($parser->{iter}, $text, $tagnames{$command}, @tags);
+							$parser->{buffer}->insert_with_tags_by_name($parser->{iter}, decode_entities($text), $tagnames{$command}, @tags);
 						}
 					} else {
 						my $text = $_;
-						$parser->{buffer}->insert_with_tags_by_name($parser->{iter}, $text, @tags);
+						$parser->{buffer}->insert_with_tags_by_name($parser->{iter}, decode_entities($text), @tags);
 					}
 				}
 			}
@@ -175,6 +297,24 @@ sub parse_from_string {
 
 =pod
 
+=head1 IMPORTABLE FUNCTIONS
+
+	use Gtk2::PodViewer::Parser qw(decode_entities);
+	my $text = decode_entities($pod);
+
+This function takes a string of POD, and returns it with all the POD entities (eg C<EE<lt>gtE<gt>> =E<gt> "E<gt>") decoded into readable characters.
+
+=cut
+
+sub decode_entities {
+	my $text = shift;
+	$text =~ s/E<([^<]*)>/$ENTITIES{$1}/g;
+	$text =~ s/\w{1}<([^<]*)>/$1/g;
+	return $text;
+}
+
+=pod
+
 =head1 SEE ALSO
 
 =over
@@ -191,8 +331,7 @@ L<Pod::Parser>
 
 =head1 AUTHORS
 
-Gavin Brown
-Torsten Schoenfeld
+Gavin Brown and Torsten Schoenfeld.
 
 =head1 COPYRIGHT
 

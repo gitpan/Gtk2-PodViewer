@@ -1,4 +1,4 @@
-# $Id: PodViewer.pm,v 1.20 2004/04/18 16:44:29 jodrell Exp $
+# $Id: PodViewer.pm,v 1.22 2004/09/01 10:59:22 jodrell Exp $
 # Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. 
@@ -9,7 +9,7 @@ use vars qw($VERSION);
 use Gtk2::Pango; # pango constants
 use strict;
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 
 #
 # we want to create a new signal for this object, which means we need to
@@ -98,6 +98,10 @@ sub INIT_INSTANCE {
 	$self->get_buffer->create_tag(
 		'indented',
 		left_margin	=> 40,
+	);
+	$self->get_buffer->create_tag(
+		'normal',
+		wrap_mode	=> 'word',
 	);
 
 	my $cursor	= Gtk2::Gdk::Cursor->new('xterm');
@@ -258,23 +262,6 @@ sub jump_to {
 	my $mark = $self->get_mark($name);
 	return undef unless (ref($mark) eq 'Gtk2::TextMark');
 	return $self->scroll_to_mark($mark, undef, 1, 0, 0);
-}
-
-=pod
-
-	$view->set_link_callback($callback);
-
-sets a callback function to be used when the user clicks on a hyperlink within the POD.
-
-B<Warning:> this function is deprecated; use the C<link_clicked> signal instead.
-
-=cut
-
-sub set_link_callback {
-	my ($self, $callback) = @_;
-	$self->signal_handler_disconnect($self->{link_callback}) if defined($self->{link_callback});
-	$self->{link_callback} = $self->signal_connect('link_clicked' => $callback);
-	return 1;
 }
 
 =pod
@@ -488,7 +475,7 @@ Emitted when the user moves the mouse pointer over a hyperlink within the POD. T
 
 =head2 The 'link_leave' signal
 
-	$viewer->signal_connect('link-enter-leave', \&leave);
+	$viewer->signal_connect('link_leave', \&leave);
 
 	sub clicked {
 		my $viewer = shift;
