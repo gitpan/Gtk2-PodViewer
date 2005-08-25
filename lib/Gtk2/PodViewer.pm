@@ -1,4 +1,4 @@
-# $Id: PodViewer.pm,v 1.26 2004/09/13 12:58:56 jodrell Exp $
+# $Id: PodViewer.pm,v 1.29 2005/08/25 15:09:49 jodrell Exp $
 # Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. 
@@ -9,7 +9,7 @@ use vars qw($VERSION);
 use Gtk2::Pango; # pango constants
 use strict;
 
-our $VERSION = '0.08a';
+our $VERSION = '0.10';
 
 #
 # we want to create a new signal for this object, which means we need to
@@ -274,10 +274,10 @@ Loads a given document. C<$document> can be a perldoc name (eg., C<'perlvar'>), 
 
 sub load {
 	my ($self, $name) = @_;
+	return 1 if $self->load_function($name);
 	return 1 if $self->load_perldoc($name);
 	return 1 if $self->load_module($name);
 	return 1 if $self->load_file($name);
-	return 1 if $self->load_function($name);
 	return undef;
 }
 
@@ -325,12 +325,16 @@ sub load_module {
 	my ($self, $module) = @_;
 	$module =~ s!::!/!g;
 	foreach my $dir (@INC) {
-		my $pm_file  = sprintf('%s/%s.pm',  $dir, $module);
 		my $pod_file = sprintf('%s/%s.pod', $dir, $module);
 		if (-e $pod_file) {
 			$self->load_file($pod_file);
 			return 1;
-		} elsif (-e $pm_file) {
+		}
+	}
+
+	foreach my $dir (@INC) {
+		my $pm_file  = sprintf('%s/%s.pm',  $dir, $module);
+		if (-e $pm_file) {
 			$self->load_file($pm_file);
 			return 1;
 		}

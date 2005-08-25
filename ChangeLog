@@ -1,3 +1,19 @@
+2005-08-25 16:09  jodrell
+
+	* lib/Gtk2/PodViewer.pm: updated version.
+
+2005-08-17 21:12  jodrell
+
+	* lib/Gtk2/PodViewer.pm: reordered the sequence of load() to prefer
+	  functions over modules - there are several clashes (eg open).
+
+2004-12-14 12:05  jodrell
+
+	* lib/Gtk2/PodViewer.pm: merging a patch from Marc 'HE'
+	  Brockschmidt <marc@marcbrockschmidt.de>, which improves the
+	  algorithm that's used to detect module files. basically it
+	  prefers a .pod file over any .pm that might exist.
+
 2004-09-13 13:58  jodrell
 
 	* lib/Gtk2/PodViewer.pm: updated docs.
