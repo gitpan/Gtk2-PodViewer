@@ -1,15 +1,16 @@
-# $Id: PodViewer.pm,v 1.29 2005/08/25 15:09:49 jodrell Exp $
-# Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
+# $Id: PodViewer.pm,v 1.34 2005/09/13 14:56:02 jodrell Exp $
+# Copyright (c) 2003-2005 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. 
 package Gtk2::PodViewer;
 use Gtk2;
 use Gtk2::PodViewer::Parser;
-use vars qw($VERSION);
+use vars qw($VERSION $self->{db});
 use Gtk2::Pango; # pango constants
+use Pod::Simple::Search;
 use strict;
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 #
 # we want to create a new signal for this object, which means we need to
@@ -22,7 +23,7 @@ our $VERSION = '0.10';
 # inherit new from Glib::Object.
 *new = \&Glib::Object::new;
 
-Glib::Type->register (
+Glib::Type->register(
 	Gtk2::TextView::,
 	__PACKAGE__,
 	signals => {
@@ -33,16 +34,59 @@ Glib::Type->register (
 			param_types => [qw/Glib::String/],
 		},
 		'link_leave' => {
-			#param_types => [qw/Glib::String/],
 		},
 	},
+	properties => [
+	        Glib::ParamSpec->boolean(
+			'use_gconf',
+			'Use GConf',
+			'Whether to use GConf to retrieve font preferences',
+			0,
+			[qw/readable writable/]
+	        ),
+	        Glib::ParamSpec->string(
+			'header_color',
+			'Header Color',
+			'The color to use on =head text, in HTML hex notation (eg #808080)',
+			'#404080',
+			[qw/readable writable/]
+	        ),
+	        Glib::ParamSpec->string(
+			'preformat_color',
+			'Preformatted text Color',
+			'The color to use on preformatted text, in HTML hex notation (eg #808080)',
+			'#606060',
+			[qw/readable writable/]
+	        ),
+	],
 );
 
 sub INIT_INSTANCE {
 	my $self = shift;
+
 	$self->set_editable(0);
 	$self->set_wrap_mode('word');
 	$self->{parser} = Gtk2::PodViewer::Parser->new(buffer => $self->get_buffer);
+
+	my $mono;
+	if ($self->get('use_gconf')) {
+		do {
+			my $file = (grep {-e "$_/Gnome2/GConf.pm"} @INC)[0].'/Gnome2/GConf.pm';
+			require($file);
+			my $gconf = Gnome2::GConf::Client->get_default;
+			$mono = $gconf->get_string('/desktop/gnome/interface/monospace_font_name');
+		};
+		if ($mono eq '' || $@) {
+			print $@;
+			printf(STDERR "*** %s error: can't get font from gconf with use_conf enabled\n", ref($self));
+			$mono = 'monospace',
+		}
+
+	} else {
+		$mono = 'monospace';
+
+	}
+
 	$self->get_buffer->create_tag(
 		'bold',
 		weight		=> PANGO_WEIGHT_BOLD
@@ -60,33 +104,38 @@ sub INIT_INSTANCE {
 		weight		=> PANGO_WEIGHT_BOLD,
 		size		=> 15 * PANGO_SCALE,
 		wrap_mode	=> 'word',
+		foreground	=> $self->get('header_color'),
 	);
 	$self->get_buffer->create_tag(
 		'head2',
 		weight		=> PANGO_WEIGHT_BOLD,
 		size		=> 12 * PANGO_SCALE,
 		wrap_mode	=> 'word',
+		foreground	=> $self->get('header_color'),
 	);
 	$self->get_buffer->create_tag(
 		'head3',
 		weight		=> PANGO_WEIGHT_BOLD,
 		size		=> 9 * PANGO_SCALE,
 		wrap_mode	=> 'word',
+		foreground	=> $self->get('header_color'),
 	);
 	$self->get_buffer->create_tag(
 		'head4',
 		weight		=> PANGO_WEIGHT_BOLD,
 		size		=> 6 * PANGO_SCALE,
 		wrap_mode	=> 'word',
+		foreground	=> $self->get('header_color'),
 	);
 	$self->get_buffer->create_tag(
 		'monospace',
-		family		=> 'monospace',
+		family		=> $mono,
 		wrap_mode	=> 'none',
+		foreground	=> $self->get('preformat_color'),
 	);
 	$self->get_buffer->create_tag(
 		'typewriter',
-		family		=> 'monospace',
+		family		=> $mono,
 		wrap_mode	=> 'word',
 	);
 	$self->get_buffer->create_tag(
@@ -103,6 +152,13 @@ sub INIT_INSTANCE {
 		'normal',
 		wrap_mode	=> 'word',
 	);
+
+	# put a 6pixel white border around the text:
+	$self->set_border_window_size('left', 6);
+	$self->set_border_window_size('top', 6);
+	$self->set_border_window_size('right', 6);
+	$self->set_border_window_size('bottom', 6);
+	$self->modify_bg('normal', Gtk2::Gdk::Color->new(65535, 65535, 65535));
 
 	my $cursor	= Gtk2::Gdk::Cursor->new('xterm');
 	my $url_cursor	= Gtk2::Gdk::Cursor->new('hand2');
@@ -128,15 +184,20 @@ sub INIT_INSTANCE {
 		my ($view, $event) = @_;
 		my ($x, $y) = $view->window_to_buffer_coords('text', $event->x, $event->y);
 		my $over_link = $view->get_iter_at_location($x, $y)->has_tag($view->get_buffer()->get_tag_table()->lookup("link"));
+
 		if ($over_link && !$self->{was_over_link}) {
 			# user has just brought the mouse over a link:
 			$self->{was_over_link} = 1;
 			my $text = $self->get_link_text_at_iter($view->get_iter_at_location($x, $y));
+
 			$self->signal_emit('link_enter', $text) if ($text ne '');
+
 		} elsif (!$over_link && $self->{was_over_link}) {
-			# user has just the mouse away from a link:
+			# user has just moved the mouse away from a link:
 			$self->{was_over_link} = 0;
+
 			$self->signal_emit('link_leave');
+
 		}
 
 		$view->get_window('text')->set_cursor($over_link ? $url_cursor : $cursor);
@@ -199,6 +260,31 @@ creates and returns a new Gtk2::PodViewer widget.
 This clears the viewer's buffer and resets the iter. You should never need to use this method since the loader methods (see L<Document Loaders> below) will do it for you.
 
 =cut
+
+sub _init_db {
+	my $self = shift;
+	$self->{db} = Pod::Simple::Search->new->survey;
+}
+
+=pod
+
+	my $db = $viewer->get_db;
+
+This method returns a hashref that contains the POD document database used internally by Gtk2::PodViewer. If you want to improve startup performance, you can cache this database using a module like C<Storable>. To load a cached database into a viewer object, call
+
+	$viewer->set_db($db);
+
+before making a call to any of the document loader methods below (otherwise, Gtk2::PodViewer will create a new database for itself). If you want to tell Gtk2::PodViewer to create a new document database (for example, after a new module has been installed), use
+
+	$viewer->reinitialize_db;
+
+=cut
+
+sub get_db { $_[0]->{db} = $_[1] }
+
+sub set_db { $_[0]->{db} }
+
+sub reinitialize_db { shift()->_init_db }
 
 sub clear {
 	my $self = shift;
@@ -274,10 +360,13 @@ Loads a given document. C<$document> can be a perldoc name (eg., C<'perlvar'>), 
 
 sub load {
 	my ($self, $name) = @_;
+
+	$self->_init_db if (!defined($self->{db}));
+
 	return 1 if $self->load_function($name);
-	return 1 if $self->load_perldoc($name);
-	return 1 if $self->load_module($name);
+	return 1 if $self->load_doc($name);
 	return 1 if $self->load_file($name);
+
 	return undef;
 }
 
@@ -287,13 +376,9 @@ sub load {
 
 The C<load()> method is a wrapper to a number of specialised document loaders. You can call one of these loaders directly to override the order in which Gtk2::PodViewer searches for documents:
 
-	$viewer->load_perldoc($perldoc);
+	$viewer->load_doc($perldoc);
 
-loads a perldoc file, or returns undef on failure.
-
-	$viewer->load_module($module);
-
-loads POD from a module file, or returns undef on failure.
+loads a perldoc file or Perl module documentation, or undef on failure.
 
 	$viewer->load_file($file);
 
@@ -307,39 +392,21 @@ This method scans the L<perlfunc> POD document for the documentation for a given
 
 This method renders the POD data in the C<$string> variable.
 
+=head2 DEPRECATED DOCUMENT LOADERS
+
+The following document loads are now deprecated, and are now just wrapper of the C<load_doc> method:
+
+	$viewer->load_perldoc($perldoc);
+	$viewer->load_module($module);
+
 =cut
 
-sub load_perldoc {
-	my ($self, $perldoc) = @_;
-	foreach my $dir (@INC) {
-		my $file = sprintf('%s/pod/%s.pod', $dir, $perldoc);
-		if (-e $file) {
-			$self->load_file($file);
-			return 1;
-		}
-	}
-	return undef;
-}
+sub load_perldoc { $_[0]->load_doc($_[1]) }
+sub load_module { $_[0]->load_doc($_[1]) }
 
-sub load_module {
-	my ($self, $module) = @_;
-	$module =~ s!::!/!g;
-	foreach my $dir (@INC) {
-		my $pod_file = sprintf('%s/%s.pod', $dir, $module);
-		if (-e $pod_file) {
-			$self->load_file($pod_file);
-			return 1;
-		}
-	}
-
-	foreach my $dir (@INC) {
-		my $pm_file  = sprintf('%s/%s.pm',  $dir, $module);
-		if (-e $pm_file) {
-			$self->load_file($pm_file);
-			return 1;
-		}
-	}
-	return undef;
+sub load_doc {
+	my ($self, $doc) = @_;
+	return ($self->{db}->{$doc} ? $self->load_file($self->{db}->{$doc}) : undef);
 }
 
 sub load_function {
@@ -455,7 +522,7 @@ sub get_link_text_at_iter {
 
 Gtk2::PodViewer inherits all of Gtk2::TextView's signals, and has the following:
 
-=head2 The 'link_clicked' signal
+=head2 The C<'link_clicked'> signal
 
 	$viewer->signal_connect('link_clicked', \&clicked);
 
@@ -466,7 +533,7 @@ Gtk2::PodViewer inherits all of Gtk2::TextView's signals, and has the following:
 
 Emitted when the user clicks on a hyperlink within the POD. This may be a section title, a document name, or a URL. The receiving function will be giving two arguments: a reference to the Gtk2::PodViewer object, and a scalar containing the link text.
 
-=head2 The 'link_enter' signal
+=head2 The C<'link_enter'> signal
 
 	$viewer->signal_connect('link_enter', \&enter);
 
@@ -477,7 +544,7 @@ Emitted when the user clicks on a hyperlink within the POD. This may be a sectio
 
 Emitted when the user moves the mouse pointer over a hyperlink within the POD. This may be a section title, a document name, or a URL. The receiving function will be giving two arguments: a reference to the Gtk2::PodViewer object, and a scalar containing the link text.
 
-=head2 The 'link_leave' signal
+=head2 The C<'link_leave'> signal
 
 	$viewer->signal_connect('link_leave', \&leave);
 
@@ -487,6 +554,30 @@ Emitted when the user moves the mouse pointer over a hyperlink within the POD. T
 	}
 
 Emitted when the user moves the mouse pointer out from a hyperlink within the POD. 
+
+=head1 PROPERTIES
+
+Gtk2::PodViewer inherits all of Gtk2::TextView's properties, and has the following:
+
+=head2 C<use_gconf>
+
+This property is a boolean value and is only useful at instantiation. It tells Gtk2::PodViewer to load font prefences from the GConf database (this requires the C<Gnome2::GConf> module). To enable GConf support, pass a true value as an argument to the constructor:
+
+	my $viewer = Gtk2::PodViewer->new('use_gconf' => 1);
+
+The default value for this property is C<false>.
+
+=head2 C<header_color>
+
+This property is a a valid Pango colour - a hex code (C<#808080>) or name (C<silver>) - that is used to colour the text in C<=head1..4> paragraphs. The default is C<#404080>.
+
+As with the C<use_gconf> property, this must be set at instantiation time.
+
+=head2 C<preformat_color>
+
+This property is a a valid Pango colour - a hex code (C<#808080>) or name (C<silver>) - that is used to colour the text indented, preformatted paragraphs. The default is C<#606060>.
+
+As with the C<use_gconf> property, this must be set at instantiation time.
 
 =head1 THE podviewer PROGRAM
 
@@ -516,7 +607,7 @@ Some strangeness with Unicode.
 
 =item *
 
-L<Gtk>2 (obviously). The most recent version will be from L<http://gtk2-perl.sf.net/>.
+L<Gtk2> (obviously). The most recent version will be from L<http://gtk2-perl.sf.net/>.
 
 =item *
 
@@ -525,6 +616,10 @@ L<Pod::Parser>
 =item *
 
 L<IO::Scalar>
+
+=item *
+
+L<Pod::Simple::Search>
 
 =back
 
@@ -554,7 +649,7 @@ Gavin Brown, Torsten Schoenfeld and Scott Arrington.
 
 =head1 COPYRIGHT
 
-(c) 2004 Gavin Brown (gavin.brown@uk.com). All rights reserved. This program is free software; you can redistribute it and/or modify it under the same terms as Perl itself. 
+(c) 2003-2005 Gavin Brown (gavin.brown@uk.com). All rights reserved. This program is free software; you can redistribute it and/or modify it under the same terms as Perl itself. 
 
 =cut
 

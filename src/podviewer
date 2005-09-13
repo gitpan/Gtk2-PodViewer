@@ -1,8 +1,8 @@
 #!/usr/bin/perl
-# Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
+# Copyright (c) 2003-2005 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. 
-# $Id: podviewer,v 1.30 2004/09/08 09:58:03 jodrell Exp $
+# $Id: podviewer,v 1.31 2005/09/13 14:53:34 jodrell Exp $
 use lib 'lib/';
 use Gtk2 -init;
 use Gtk2::PodViewer;
@@ -519,7 +519,7 @@ sub about {
 
 Using Gtk2::PodViewer v$Gtk2::PodViewer::VERSION
 
-Copyright (c) 2004
+Copyright (c) 2003-2005
 Gavin Brown
 Torsten Schoenfeld
 Scott Arrington
@@ -847,7 +847,7 @@ Gavin Brown, Torsten Schoenfeld and Scott Arrington.
 
 =head1 COPYRIGHT
 
-(c) 2004 Gavin Brown (gavin.brown@uk.com). All rights reserved. This program is free software; you can redistribute it and/or modify it under the same terms as Perl itself. 
+(c) 2003-2005 Gavin Brown (gavin.brown@uk.com). All rights reserved. This program is free software; you can redistribute it and/or modify it under the same terms as Perl itself. 
 
 =cut
 

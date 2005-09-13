@@ -1,7 +1,7 @@
-# $Id: Parser.pm,v 1.18 2004/09/13 10:44:20 jodrell Exp $
-# Copyright (c) 2003 Gavin Brown. All rights reserved. This program is
+# $Id: Parser.pm,v 1.20 2005/09/13 14:53:34 jodrell Exp $
+# Copyright (c) 2003-2005 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
-# terms as Perl itself. package Gtk2::PodViewer::Parser;
+# terms as Perl itself.
 package Gtk2::PodViewer::Parser;
 use base 'Pod::Parser';
 use Carp;
@@ -359,7 +359,7 @@ Gavin Brown, Torsten Schoenfeld and Scott Arrington.
 
 =head1 COPYRIGHT
 
-(c) 2004 Gavin Brown (gavin.brown@uk.com). All rights reserved. This program is free software; you can redistribute it and/or modify it under the same terms as Perl itself. 
+(c) 2003-2005 Gavin Brown (gavin.brown@uk.com). All rights reserved. This program is free software; you can redistribute it and/or modify it under the same terms as Perl itself. 
 
 =cut
 
