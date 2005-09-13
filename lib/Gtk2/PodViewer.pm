@@ -1,4 +1,4 @@
-# $Id: PodViewer.pm,v 1.34 2005/09/13 14:56:02 jodrell Exp $
+# $Id: PodViewer.pm,v 1.35 2005/09/13 15:06:13 jodrell Exp $
 # Copyright (c) 2003-2005 Gavin Brown. All rights reserved. This program is
 # free software; you can redistribute it and/or modify it under the same
 # terms as Perl itself. 
@@ -6,11 +6,11 @@ package Gtk2::PodViewer;
 use Gtk2;
 use Gtk2::PodViewer::Parser;
 use vars qw($VERSION $self->{db});
-use Gtk2::Pango; # pango constants
+use Gtk2::Pango;
 use Pod::Simple::Search;
 use strict;
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
 #
 # we want to create a new signal for this object, which means we need to
@@ -280,9 +280,9 @@ before making a call to any of the document loader methods below (otherwise, Gtk
 
 =cut
 
-sub get_db { $_[0]->{db} = $_[1] }
+sub set_db { $_[0]->{db} = $_[1] }
 
-sub set_db { $_[0]->{db} }
+sub get_db { $_[0]->{db} }
 
 sub reinitialize_db { shift()->_init_db }
 
